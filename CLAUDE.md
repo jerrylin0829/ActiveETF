@@ -45,3 +45,7 @@ GitHub Actions（每日 18:30 主場 + 21:30 補抓）
 專案在設計階段，尚未 scaffold——目前 repo 只有 spec。下一步是用 writing-plans 產出實作計畫。**開始實作後，把 build/test/lint 指令補進本檔**（預期：`scraper/` 用 uv + pytest；`web/` 用 Next.js 慣例指令）。
 
 裝 Python 套件用 `uv`，不用 pip。
+
+**預定建立的專案 skills**（等對應程式碼存在、流程被實際走過一遍後再建，屆時依 writing-skills 的測試流程）：
+- `new-adapter`：新增一家投信 PCF adapter 的完整流程（探測、解析、三道驗證、registry 註冊、測試）
+- `data-gap`：資料缺口診斷與補抓 runbook（讀 scrape_log → 判斷可否補 → 重跑 pipeline → 核對照組網站）
