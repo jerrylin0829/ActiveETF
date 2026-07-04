@@ -1,0 +1,47 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## 專案概述
+
+追蹤台股全部主動式**股票型** ETF（代號結尾 `A`，約 27 檔）的每日持股異動 Dashboard：增減持/新進/出清事件、當前持股比例、績效與勝率指標。公開網站，營運成本 $0/月。
+
+**唯一的設計事實來源**：`docs/superpowers/specs/2026-07-04-active-etf-tracker-design.md`。任何實作決策與該 spec 衝突時，先讀 spec；要改規則就先改 spec（並 commit），不要讓程式碼默默偏離文件。
+
+## 架構（三段式，詳見 spec §3）
+
+```
+GitHub Actions（每日 18:30 主場 + 21:30 補抓）
+  → Python 爬蟲（15 家投信 adapter，各自實作 fetch(etf_id)）
+  → Supabase Postgres（快照 + 事件 + 指標快取）
+  → Next.js on Vercel（唯讀呈現，不做計算）
+```
+
+- 持股明細（PCF）**只能爬各投信官網**——FinMind、TWSE OpenAPI、SITCA 都沒有這個資料（已查證，見 spec §2），不要再花時間找現成 API
+- 行情資料用 FinMind（還原價、加權報酬指數），TWSE OpenAPI 為備援
+- 計算一律在寫入時做（pipeline），前端只 SELECT
+
+## 不可違背的資料原則
+
+1. `holdings_snapshot` 是 append-only 事實來源，所有衍生表（事件、指標）必須可以從它重算
+2. 入庫前三道驗證（權重總和 70–101%、筆數無突變、代號存在）任一不過 = 該檔標失敗、**不寫入**——錯資料比缺資料危險
+3. 異動事件需「股數變化」與「權重變化 ≥ 0.05pp」**同時成立**（過濾申贖造成的等比例變動與純價格波動）
+4. 爬蟲失敗必須可見（`scrape_log` + Dashboard 黃條），不允許靜默缺資料
+
+## 指標規則速記（完整定義在 spec §6，改動須同步 spec）
+
+- 所有報酬用**還原價**；ETF 層級基準 = 0050（還原），個股層級基準 = 加權報酬指數
+- 選股勝率計分視窗 = 買進日 → (出清日 or 最新交易日)；未平倉滿 5 個交易日起計浮動分（`MIN_OPEN_SCORING_DAYS = 5`，為待回測的起始值）；已實現/未平倉拆開顯示、永遠帶樣本數
+- 持有滿 20 個交易日 = 「長抱」徽章、移出新倉追蹤雷達
+
+## 慣例
+
+- 文件、commit message、UI 文案一律**繁體中文**；程式碼識別字與註解用英文
+- Commit 格式：`type: 中文描述`（現有歷史用 `docs:`，之後 `feat:`/`fix:` 依此類推）
+- 漲跌標色遵循台股習慣：**紅漲綠跌**
+
+## 目前狀態與指令
+
+專案在設計階段，尚未 scaffold——目前 repo 只有 spec。下一步是用 writing-plans 產出實作計畫。**開始實作後，把 build/test/lint 指令補進本檔**（預期：`scraper/` 用 uv + pytest；`web/` 用 Next.js 慣例指令）。
+
+裝 Python 套件用 `uv`，不用 pip。
