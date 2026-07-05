@@ -25,7 +25,7 @@ REGISTRY: list[EtfEntry] = [
     EtfEntry("00407A", "主動凱基台灣", "凱基", "tw", None, None),
     EtfEntry("00980A", "主動野村臺灣優選", "野村", "tw", None, None),
     EtfEntry("00981A", "主動統一台股增長", "統一", "tw", None, None),
-    EtfEntry("00982A", "主動群益台灣強棒", "群益", "tw", None, "capital"),
+    EtfEntry("00982A", "主動群益台灣強棒", "群益", "tw", "https://www.capitalfund.com.tw/etf/product/detail/399/portfolio", "capital"),
     EtfEntry("00983A", "主動中信ARK創新", "中信", "global", None, None),
     EtfEntry("00984A", "主動安聯台灣高息", "安聯", "tw", None, None),
     EtfEntry("00985A", "主動野村台灣50", "野村", "tw", None, None),
@@ -40,7 +40,7 @@ REGISTRY: list[EtfEntry] = [
     EtfEntry("00994A", "主動第一金台股優", "第一金", "tw", None, None),
     EtfEntry("00995A", "主動中信台灣卓越", "中信", "tw", None, None),
     EtfEntry("00996A", "主動兆豐台灣豐收", "兆豐", "tw", None, None),
-    EtfEntry("00997A", "主動群益美國增長", "群益", "global", None, "capital"),
+    EtfEntry("00997A", "主動群益美國增長", "群益", "global", "https://www.capitalfund.com.tw/etf/product/detail/502/portfolio", "capital"),
     EtfEntry("00998A", "主動復華金融股息", "復華", "tw", None, None),
     EtfEntry("00999A", "主動野村臺灣高息", "野村", "tw", None, None),
 ]
