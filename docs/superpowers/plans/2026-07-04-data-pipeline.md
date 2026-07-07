@@ -1328,11 +1328,11 @@ def style_metrics(etf_id: str, today: dt.date) -> dict:
 
 ---
 
-### Task 15: backfill — 一次性股價回補
+### Task 15: backfill — 一次性股價回補 ⚠️ 腳本與測試完成，真執行待 DB 與還原價權限
 
 **Files:** Create: `scraper/scripts/backfill.py`
 
-- [ ] **Step 1: 實作**
+- [x] **Step 1: 實作**
 
 ```python
 # scripts/backfill.py
@@ -1358,7 +1358,7 @@ db.upsert_prices([(finmind.TAIEX_TRI, r["date"], None, r["price"]) for r in tri]
 print(f"TAIEX_TRI: {len(tri)} rows")
 ```
 
-- [ ] **Step 2: 執行並驗證**
+- [ ] **Step 2: 執行並驗證** — 待 `SUPABASE_DB_URL`，且目前 `TaiwanStockPriceAdj` 受 FinMind 帳號等級阻擋
 
 ```bash
 uv run python scripts/backfill.py
@@ -1366,7 +1366,7 @@ psql "$SUPABASE_DB_URL" -c "select stock_id, count(*) from stock_price group by 
 ```
 
 Expected: 每檔 ETF 依上市日有數十到 200+ 筆；0050 與 TAIEX_TRI 約 280+ 筆。
-- [ ] **Step 3: Commit** → `git commit -am "feat: 股價一次性回補腳本"`
+- [x] **Step 3: Commit** → `git commit -m "feat: 股價一次性回補腳本"`
 
 ---
 
