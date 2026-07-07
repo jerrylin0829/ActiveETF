@@ -37,7 +37,7 @@ REGISTRY: list[EtfEntry] = [
     EtfEntry("00991A", "主動復華未來50", "復華", "tw", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF23", "fuhua"),
     EtfEntry("00992A", "主動群益科技創新", "群益", "tw", "https://www.capitalfund.com.tw/etf/product/detail/500/portfolio", "capital"),
     EtfEntry("00993A", "主動安聯台灣", "安聯", "tw", None, None),
-    EtfEntry("00994A", "主動第一金台股優", "第一金", "tw", None, None),
+    EtfEntry("00994A", "主動第一金台股優", "第一金", "tw", "https://www.fsitc.com.tw/FundDetail.aspx?ID=182", "fsitc"),
     EtfEntry("00995A", "主動中信台灣卓越", "中信", "tw", None, None),
     EtfEntry("00996A", "主動兆豐台灣豐收", "兆豐", "tw", None, None),
     EtfEntry("00997A", "主動群益美國增長", "群益", "global", "https://www.capitalfund.com.tw/etf/product/detail/502/portfolio", "capital"),
