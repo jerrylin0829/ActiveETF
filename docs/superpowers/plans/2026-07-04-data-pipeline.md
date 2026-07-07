@@ -993,11 +993,11 @@ Expected: 每檔筆數 >10、權重和 70–101。
 
 ---
 
-### Task 13: metrics — 報酬與擇時勝率（spec §6） ⏳ 待做（尚未開工，Task 7 db 落地後最適合一併驗證）
+### Task 13: metrics — 報酬與擇時勝率（spec §6） ⚠️ 程式與測試完成，FinMind 還原價 endpoint 受帳號等級阻擋
 
 **Files:** Create: `scraper/src/activeetf/metrics.py`, Test: `scraper/tests/test_metrics.py`
 
-- [ ] **Step 1: 失敗測試（純函式，餵合成價格序列）**
+- [x] **Step 1: 失敗測試（純函式，餵合成價格序列）**
 
 ```python
 # tests/test_metrics.py
@@ -1033,8 +1033,8 @@ def test_timing_win_rate():
     assert months >= 4 and wins == months
 ```
 
-- [ ] **Step 2: 確認失敗** → FAIL
-- [ ] **Step 3: 實作**
+- [x] **Step 2: 確認失敗** → FAIL（`activeetf.metrics` 尚不存在）
+- [x] **Step 3: 實作**
 
 ```python
 # src/activeetf/metrics.py
@@ -1159,9 +1159,9 @@ def _write_metrics(etf_id: str, d: dt.date, row: dict) -> None:
 
 （`picking_win_rate` / `style_metrics` 於 Task 14 實作；本 task 測試不觸及 `compute_all`，先讓兩者回傳空 dict 的 stub 放在 metrics.py 底部，Task 14 以 TDD 取代。）
 
-- [ ] **Step 4: 確認通過** → `uv run pytest tests/test_metrics.py -v` → PASS
-- [ ] **Step 5: FinMind 欄位實測**：`TaiwanStockTotalReturnIndex` 的值欄位名（`price`）與 `TaiwanStockPriceAdj` 欄位以真呼叫確認一次，不符就修 `load_tri_series`/`load_adj_series`
-- [ ] **Step 6: Commit** → `git commit -am "feat: 報酬與擇時勝率計算"`
+- [x] **Step 4: 確認通過** → `uv run pytest tests/test_metrics.py -v` → PASS；`uv run pytest -v` → 25 passed
+- [x] **Step 5: FinMind 欄位實測**：`TaiwanStockTotalReturnIndex` 真呼叫成功，欄位為 `price`；`TaiwanStockPriceAdj` 真呼叫回 400（目前 token 等級為 register，需 backer/sponsor），官方文件欄位為 `close`。不改用未還原價，已同步 spec §2。
+- [x] **Step 6: Commit** → `git commit -m "feat: 報酬與擇時勝率計算"`
 
 ---
 
