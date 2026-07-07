@@ -73,11 +73,11 @@ git add scraper && git commit -m "feat: scraper 專案 scaffold（uv + pytest）
 
 ---
 
-### Task 2: 資料庫 schema
+### Task 2: 資料庫 schema ⚠️ migration 已寫入，Supabase 套用待 `SUPABASE_DB_URL`
 
 **Files:** Create: `scraper/migrations/001_schema.sql`
 
-- [ ] **Step 1: 寫 migration**
+- [x] **Step 1: 寫 migration**
 
 ```sql
 -- 001_schema.sql — spec §4
@@ -157,14 +157,14 @@ begin
 end $$;
 ```
 
-- [ ] **Step 2: 套用到 Supabase 並驗證**
+- [ ] **Step 2: 套用到 Supabase 並驗證** — 待 `SUPABASE_DB_URL`
 
 ```bash
 psql "$SUPABASE_DB_URL" -f scraper/migrations/001_schema.sql
 psql "$SUPABASE_DB_URL" -c "\dt"   # 應列出 7 張表
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scraper/migrations && git commit -m "feat: DB schema（7 表 + RLS 匿名唯讀）"
