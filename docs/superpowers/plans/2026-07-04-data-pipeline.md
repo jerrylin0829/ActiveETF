@@ -966,7 +966,7 @@ if __name__ == "__main__":
 
 ---
 
-### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 群益（3 檔）+ 野村（3 檔）+ 台新（2 檔）+ 富邦（1 檔）+ 復華（2 檔）+ 第一金（1 檔）完成，尚餘 16 檔 ETF
+### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 群益（3 檔）+ 野村（3 檔）+ 台新（2 檔）+ 富邦（1 檔）+ 復華（2 檔）+ 第一金（1 檔）+ 凱基（1 檔）完成，尚餘 15 檔 ETF
 
 **Files:** Create: `scraper/src/activeetf/adapters/<issuer>.py` × 每家、對應 fixture 與測試
 
@@ -979,6 +979,7 @@ if __name__ == "__main__":
   - [x] 富邦：00405A，官方 `Assets.aspx` 靜態表格；live smoke：50 檔，權重 95.87%
   - [x] 復華：00991A / 00998A，官方 detail 頁連到 `api/assetsExcel` xlsx；live smoke：48/42 檔，權重 97.512%/98.447%；00998A 確認為 global universe
   - [x] 第一金：00994A，官方 `WebAPI.aspx/Get_hd`；live smoke：36 檔，權重 95.66%
+  - [x] 凱基：00407A，官方 Fund detail 靜態表格（頁面含重複 RWD 表格，adapter 依股票代號去重）；live smoke：50 檔，權重 91.18%
 - [ ] **Step 3: 全部完成後跑全量煙霧測試**
 
 ```bash
