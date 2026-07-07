@@ -29,8 +29,8 @@ REGISTRY: list[EtfEntry] = [
     EtfEntry("00983A", "主動中信ARK創新", "中信", "global", None, None),
     EtfEntry("00984A", "主動安聯台灣高息", "安聯", "tw", None, None),
     EtfEntry("00985A", "主動野村台灣50", "野村", "tw", "https://www.nomurafunds.com.tw/ETFWEB/pcf", "nomura"),
-    EtfEntry("00986A", "主動台新龍頭成長", "台新", "tw", None, None),
-    EtfEntry("00987A", "主動台新優勢成長", "台新", "tw", None, None),
+    EtfEntry("00986A", "主動台新龍頭成長", "台新", "global", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00986A", "tsit"),
+    EtfEntry("00987A", "主動台新優勢成長", "台新", "tw", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00987A", "tsit"),
     EtfEntry("00988A", "主動統一全球創新", "統一", "global", None, None),
     EtfEntry("00989A", "主動摩根美國科技", "摩根", "global", None, None),
     EtfEntry("00990A", "主動元大AI新經濟", "元大", "tw", None, None),  # universe 待確認：名稱未明示市場，首抓時驗證

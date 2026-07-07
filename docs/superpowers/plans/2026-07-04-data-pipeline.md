@@ -966,7 +966,7 @@ if __name__ == "__main__":
 
 ---
 
-### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 群益（3 檔）+ 野村（3 檔）完成，尚餘 22 檔 ETF
+### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 群益（3 檔）+ 野村（3 檔）+ 台新（2 檔）完成，尚餘 20 檔 ETF
 
 **Files:** Create: `scraper/src/activeetf/adapters/<issuer>.py` × 每家、對應 fixture 與測試
 
@@ -975,6 +975,7 @@ if __name__ == "__main__":
 - [ ] **Step 1: 依 Task 8 探測結果排定順序**：靜態 HTML/JSON API 的先做（快），需要 JS 渲染的最後做（可能要 playwright，屆時再加依賴——YAGNI）
 - [ ] **Step 2: 每完成一家：更新 registry 的 pcf_url + adapter 欄、跑該家煙霧測試、單獨 commit**（`feat: <投信> adapter`）
   - [x] 野村：00980A / 00985A / 00999A，官方 API `Fund/GetFundTradeInfoDate` + `Fund/GetFundTradeInfo`；live smoke：48/50/61 檔，權重 90.86%/92.26%/96.19%
+  - [x] 台新：00986A / 00987A，官方 ETF detail HTML 靜態表格；live smoke：32/28 檔，權重 92.02%/96.11%；00986A 確認為 global universe，00987A 台股代號需移除 ` TT` suffix
 - [ ] **Step 3: 全部完成後跑全量煙霧測試**
 
 ```bash
