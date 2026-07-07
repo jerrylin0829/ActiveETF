@@ -1,0 +1,33 @@
+name: daily-pipeline
+on:
+  schedule:
+    - cron: '30 10 * * 1-5'   # Taipei 18:30 (UTC+8)
+    - cron: '30 13 * * 1-5'   # Taipei 21:30 (UTC+8)
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Run pipeline
+        working-directory: scraper
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: uv run python -m activeetf.pipeline
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `pipeline 失敗 ${new Date().toISOString().slice(0, 10)}`,
+              body: `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });

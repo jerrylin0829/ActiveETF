@@ -1370,11 +1370,11 @@ Expected: 每檔 ETF 依上市日有數十到 200+ 筆；0050 與 TAIEX_TRI 約 
 
 ---
 
-### Task 16: GitHub Actions 排程
+### Task 16: GitHub Actions 排程 ⚠️ workflow 已寫入，遠端驗證待 GitHub secrets
 
 **Files:** Create: `.github/workflows/daily.yml`
 
-- [ ] **Step 1: 寫 workflow**
+- [x] **Step 1: 寫 workflow**
 
 ```yaml
 # .github/workflows/daily.yml
@@ -1412,7 +1412,7 @@ jobs:
             });
 ```
 
-- [ ] **Step 2: 推上 GitHub 後手動觸發驗證**
+- [ ] **Step 2: 推上 GitHub 後手動觸發驗證** — 待 GitHub secrets / push 後驗證
 
 ```bash
 git add .github && git commit -m "feat: GitHub Actions 每日排程（18:30/21:30 台北）"
@@ -1421,7 +1421,7 @@ gh workflow run daily-pipeline && sleep 60 && gh run list --workflow daily-pipel
 ```
 
 Expected: run 成功；`psql` 查 `scrape_log` 有當日紀錄。
-- [ ] **Step 3: 在 Actions 環境跑一次 probe 比對本機結果（確認海外 IP 是否被擋）**
+- [ ] **Step 3: 在 Actions 環境跑一次 probe 比對本機結果（確認海外 IP 是否被擋）** — 待 GitHub Actions 環境
 
 臨時在 workflow 加一個 step `run: uv run python scripts/probe.py`，`workflow_dispatch` 觸發一次，比對輸出後移除該 step。被擋的投信在 registry 註記，依 spec §5 備案處理（代理或本機排程）。
 
