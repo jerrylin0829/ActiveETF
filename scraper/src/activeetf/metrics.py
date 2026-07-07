@@ -4,10 +4,20 @@ Pure functions accept {date: adj_close} dictionaries. compute_all assembles
 database and FinMind data, then writes etf_metrics.
 """
 import datetime as dt
+from dataclasses import dataclass
 
 from activeetf import db, finmind
 
 Series = dict[dt.date, float]
+MIN_OPEN_SCORING_DAYS = 5
+ADD_EVENT_MIN_SHARE_GROWTH = 0.10
+
+
+@dataclass(frozen=True)
+class Round:
+    stock_id: str
+    entry: dt.date
+    exit: dt.date | None
 
 
 def _at_or_before(s: Series, d: dt.date) -> tuple[dt.date, float] | None:
@@ -152,11 +162,126 @@ def _write_metrics(etf_id: str, d: dt.date, row: dict) -> None:
         )
 
 
+def build_rounds(events: list[tuple]) -> list[Round]:
+    """Build scoring rounds from holding changes."""
+    entries_, exits = [], {}
+    for d, sid, typ, delta, prev_shares in sorted(events):
+        if typ == "NEW":
+            entries_.append((d, sid))
+        elif (
+            typ == "ADD"
+            and prev_shares
+            and delta / prev_shares >= ADD_EVENT_MIN_SHARE_GROWTH
+        ):
+            entries_.append((d, sid))
+        elif typ == "EXIT":
+            exits.setdefault(sid, []).append(d)
+
+    rounds = []
+    for d, sid in entries_:
+        exit_d = min((x for x in exits.get(sid, []) if x > d), default=None)
+        rounds.append(Round(sid, d, exit_d))
+    return rounds
+
+
+def _window_return(s: Series, start: dt.date, end: dt.date) -> float | None:
+    a, b = _at_or_before(s, start), _at_or_before(s, end)
+    if a is None or b is None or a[0] == b[0] or a[1] == 0:
+        return None
+    return b[1] / a[1] - 1.0
+
+
+def score_rounds(
+    rounds: list[Round],
+    stock_series: dict[str, Series],
+    tri: Series,
+    asof: dt.date,
+    min_open_days: int = MIN_OPEN_SCORING_DAYS,
+) -> dict:
+    realized_w = realized_t = open_w = open_t = 0
+    trading_days = sorted(tri)
+    for r in rounds:
+        s = stock_series.get(r.stock_id)
+        if not s:
+            continue
+        end = r.exit or asof
+        if r.exit is None:
+            elapsed = len([d for d in trading_days if r.entry < d <= asof])
+            if elapsed < min_open_days:
+                continue
+        sr, br = _window_return(s, r.entry, end), _window_return(tri, r.entry, end)
+        if sr is None or br is None:
+            continue
+        win = sr > br
+        if r.exit is not None:
+            realized_t += 1
+            realized_w += win
+        else:
+            open_t += 1
+            open_w += win
+    return {
+        "picking_realized_wins": realized_w,
+        "picking_realized_total": realized_t,
+        "picking_open_wins": open_w,
+        "picking_open_total": open_t,
+    }
+
+
 def picking_win_rate(etf_id: str, today: dt.date, tri: Series) -> dict:
-    """Task 14 placeholder."""
-    return {}
+    with db.conn() as c:
+        events = c.execute(
+            """
+            select hc.trade_date, hc.stock_id, hc.change_type, hc.shares_delta,
+                   coalesce(hs.shares, 0)
+            from holding_change hc
+            left join holdings_snapshot hs
+              on hs.etf_id = hc.etf_id and hs.stock_id = hc.stock_id
+             and hs.trade_date = (select max(trade_date) from holdings_snapshot
+                                  where etf_id = hc.etf_id and stock_id = hc.stock_id
+                                    and trade_date < hc.trade_date)
+            where hc.etf_id = %s
+            """,
+            (etf_id,),
+        ).fetchall()
+    rounds = build_rounds([tuple(e) for e in events])
+    tw_ids = db.known_stock_ids()
+    needed = {r.stock_id for r in rounds if r.stock_id in tw_ids}
+    start = min((r.entry for r in rounds), default=today)
+    series = {sid: load_adj_series(sid, start, today) for sid in needed}
+    return score_rounds(rounds, series, tri, today)
 
 
 def style_metrics(etf_id: str, today: dt.date) -> dict:
-    """Task 14 placeholder."""
-    return {}
+    """Median realized holding days and recent weekly turnover."""
+    with db.conn() as c:
+        rounds = c.execute(
+            """
+            select n.stock_id, n.trade_date as entry,
+                   (select min(trade_date) from holding_change x
+                    where x.etf_id = n.etf_id and x.stock_id = n.stock_id
+                      and x.change_type = 'EXIT' and x.trade_date > n.trade_date) as exit
+            from holding_change n
+            where n.etf_id = %s and n.change_type = 'NEW'
+            """,
+            (etf_id,),
+        ).fetchall()
+        held = [r for r in rounds if r[2] is not None]
+        durations = sorted((r[2] - r[1]).days for r in held)
+        recent = c.execute(
+            """
+            select count(*) from holding_change
+            where etf_id = %s and change_type in ('NEW','EXIT')
+              and trade_date > %s
+            """,
+            (etf_id, today - dt.timedelta(days=7)),
+        ).fetchone()[0]
+        avg_count = c.execute(
+            """
+            select avg(cnt) from (select count(*) cnt from holdings_snapshot
+            where etf_id = %s group by trade_date order by trade_date desc limit 5) t
+            """,
+            (etf_id,),
+        ).fetchone()[0]
+    median = durations[len(durations) // 2] if durations else None
+    turnover = float(recent) / float(avg_count) * 100 if avg_count else None
+    return {"median_holding_days": median, "weekly_turnover_pct": turnover}

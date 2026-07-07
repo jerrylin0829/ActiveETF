@@ -1165,11 +1165,11 @@ def _write_metrics(etf_id: str, d: dt.date, row: dict) -> None:
 
 ---
 
-### Task 14: metrics — 選股勝率與風格指標（spec §6 最終版規則）
+### Task 14: metrics — 選股勝率與風格指標（spec §6 最終版規則） ✅ 完成
 
 **Files:** Modify: `scraper/src/activeetf/metrics.py`, Test: `scraper/tests/test_metrics_picking.py`
 
-- [ ] **Step 1: 失敗測試**
+- [x] **Step 1: 失敗測試**
 
 ```python
 # tests/test_metrics_picking.py
@@ -1215,8 +1215,8 @@ def test_open_round_below_min_days_not_scored():
     assert res["picking_open_total"] == 0   # 未滿 5 個交易日不計
 ```
 
-- [ ] **Step 2: 確認失敗** → FAIL
-- [ ] **Step 3: 實作（取代 Task 13 的 stub）**
+- [x] **Step 2: 確認失敗** → FAIL（`build_rounds` / `score_rounds` 尚不存在）
+- [x] **Step 3: 實作（取代 Task 13 的 stub）**
 
 ```python
 # 追加於 src/activeetf/metrics.py（取代底部 stub）
@@ -1322,9 +1322,9 @@ def style_metrics(etf_id: str, today: dt.date) -> dict:
     return {"median_holding_days": median, "weekly_turnover_pct": turnover}
 ```
 
-- [ ] **Step 4: 確認通過** → `uv run pytest tests/test_metrics_picking.py -v` → PASS，並跑全套 `uv run pytest -v` 確認無回歸
-- [ ] **Step 5: 移除 Task 11 pipeline 中 `metrics.compute_all` 的佔位（若有）**
-- [ ] **Step 6: Commit** → `git commit -am "feat: 選股勝率（回合制）與操作風格指標"`
+- [x] **Step 4: 確認通過** → `uv run pytest tests/test_metrics_picking.py -v` → PASS，並跑全套 `uv run pytest -v` → 29 passed
+- [x] **Step 5: 移除 Task 11 pipeline 中 `metrics.compute_all` 的佔位（若有）**
+- [x] **Step 6: Commit** → `git commit -m "feat: 選股勝率（回合制）與操作風格指標"`
 
 ---
 
