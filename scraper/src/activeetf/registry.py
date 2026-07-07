@@ -34,14 +34,14 @@ REGISTRY: list[EtfEntry] = [
     EtfEntry("00988A", "主動統一全球創新", "統一", "global", None, None),
     EtfEntry("00989A", "主動摩根美國科技", "摩根", "global", None, None),
     EtfEntry("00990A", "主動元大AI新經濟", "元大", "tw", None, None),  # universe 待確認：名稱未明示市場，首抓時驗證
-    EtfEntry("00991A", "主動復華未來50", "復華", "tw", None, None),
+    EtfEntry("00991A", "主動復華未來50", "復華", "tw", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF23", "fuhua"),
     EtfEntry("00992A", "主動群益科技創新", "群益", "tw", "https://www.capitalfund.com.tw/etf/product/detail/500/portfolio", "capital"),
     EtfEntry("00993A", "主動安聯台灣", "安聯", "tw", None, None),
     EtfEntry("00994A", "主動第一金台股優", "第一金", "tw", None, None),
     EtfEntry("00995A", "主動中信台灣卓越", "中信", "tw", None, None),
     EtfEntry("00996A", "主動兆豐台灣豐收", "兆豐", "tw", None, None),
     EtfEntry("00997A", "主動群益美國增長", "群益", "global", "https://www.capitalfund.com.tw/etf/product/detail/502/portfolio", "capital"),
-    EtfEntry("00998A", "主動復華金融股息", "復華", "tw", None, None),
+    EtfEntry("00998A", "主動復華金融股息", "復華", "global", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF24", "fuhua"),
     EtfEntry("00999A", "主動野村臺灣高息", "野村", "tw", "https://www.nomurafunds.com.tw/ETFWEB/pcf", "nomura"),
 ]
 

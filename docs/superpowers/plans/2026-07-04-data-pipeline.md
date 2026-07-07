@@ -966,7 +966,7 @@ if __name__ == "__main__":
 
 ---
 
-### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 群益（3 檔）+ 野村（3 檔）+ 台新（2 檔）+ 富邦（1 檔）完成，尚餘 19 檔 ETF
+### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 群益（3 檔）+ 野村（3 檔）+ 台新（2 檔）+ 富邦（1 檔）+ 復華（2 檔）完成，尚餘 17 檔 ETF
 
 **Files:** Create: `scraper/src/activeetf/adapters/<issuer>.py` × 每家、對應 fixture 與測試
 
@@ -977,6 +977,7 @@ if __name__ == "__main__":
   - [x] 野村：00980A / 00985A / 00999A，官方 API `Fund/GetFundTradeInfoDate` + `Fund/GetFundTradeInfo`；live smoke：48/50/61 檔，權重 90.86%/92.26%/96.19%
   - [x] 台新：00986A / 00987A，官方 ETF detail HTML 靜態表格；live smoke：32/28 檔，權重 92.02%/96.11%；00986A 確認為 global universe，00987A 台股代號需移除 ` TT` suffix
   - [x] 富邦：00405A，官方 `Assets.aspx` 靜態表格；live smoke：50 檔，權重 95.87%
+  - [x] 復華：00991A / 00998A，官方 detail 頁連到 `api/assetsExcel` xlsx；live smoke：48/42 檔，權重 97.512%/98.447%；00998A 確認為 global universe
 - [ ] **Step 3: 全部完成後跑全量煙霧測試**
 
 ```bash
