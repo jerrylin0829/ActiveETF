@@ -377,7 +377,7 @@ def diff_snapshots(prev: dict[str, Holding], curr: dict[str, Holding]) -> list[C
 
 ---
 
-### Task 6: finmind client ✅ 完成（commit 21a3ff2；Step 5 live 驗證仍待補——需 FINMIND_TOKEN）
+### Task 6: finmind client ⚠️ client 完成，live 驗證發現價格資料集受帳號等級阻擋
 
 **Files:** Create: `scraper/src/activeetf/finmind.py`, Test: `scraper/tests/test_finmind.py`
 
@@ -463,7 +463,7 @@ def is_trading_day(date: str) -> bool:
 ```
 
 - [x] **Step 4: 確認通過** → PASS
-- [ ] **Step 5: 實測一次真 API（人工確認）** — 待補：需 `FINMIND_TOKEN`
+- [x] **Step 5: 實測一次真 API（人工確認）** — 2026-07-07 已實測：`TaiwanStockTotalReturnIndex` 可取且欄位為 `price`；`TaiwanStockPrice` / `TaiwanStockPriceAdj` 回 400（register/free 等級不足），已同步 spec §2
 
 Run: `uv run python -c "from activeetf import finmind; print(len(finmind.market_close('2026-07-03')))"`
 Expected: 一個 > 1000 的數字（全市場檔數）。**注意**：若 `TaiwanStockPriceAdj`／`TaiwanStockTotalReturnIndex` 在免費層拿不到或欄位不同，在此步驟就會發現——立即記錄實際欄位並調整 client，不要拖到 pipeline 才炸。
