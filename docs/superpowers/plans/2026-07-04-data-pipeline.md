@@ -991,7 +991,7 @@ for e in entries():
 ```
 
 Expected: 每檔筆數 >10、權重和 70–101。
-- [ ] **Step 4: 完成第 3 家後，依 CLAUDE.md 的約定建立 `new-adapter` 專案 skill**（此時流程已被實走多遍，符合 writing-skills 的測試前提）
+- [x] **Step 4: 完成第 3 家後，依 CLAUDE.md 的約定建立 `new-adapter` 專案 skill**（此時流程已被實走多遍，符合 writing-skills 的測試前提）
 - [ ] **Step 5: Commit**（每家一個，已含在 Step 2）
 
 ---

@@ -1,0 +1,3 @@
+interface:
+  display_name: "New Adapter"
+  short_description: "Add ActiveETF issuer PCF adapters"
