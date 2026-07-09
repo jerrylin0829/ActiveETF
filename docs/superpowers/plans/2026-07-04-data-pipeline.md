@@ -966,7 +966,7 @@ if __name__ == "__main__":
 
 ---
 
-### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 已完成 22 檔 ETF，尚餘 6 檔 ETF
+### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 已完成 25 檔 ETF，尚餘 3 檔 ETF
 
 **Files:** Create: `scraper/src/activeetf/adapters/<issuer>.py` × 每家、對應 fixture 與測試
 
@@ -985,6 +985,7 @@ if __name__ == "__main__":
   - [x] 中信：00406A / 00983A / 00995A，官方 `home/AuthToken` + `etf/Buyback` JSON API；live smoke：50/37/53 檔，權重 82.77%/95.58%/95.39%
   - [x] 安聯：00402A / 00984A / 00993A，官方 `AntiForgery/GetAntiForgeryToken` + `Fund/GetFundTradeInfo` JSON API；live smoke：51/119/50 檔，權重 97.52%/96.55%/96.34%
   - [x] 聯博：00404A，官方 `webapi.alliancebernstein.com` 完整 holdings JSON API（只取股票區塊）；live smoke：50 檔，權重 89.13%
+  - [x] 統一：00403A / 00981A / 00988A，官方 PCF 頁 bootstrap cookie 後呼叫 `Transaction/GetPCF` JSON API（只取股票資產）；live smoke：46/35/42 檔，權重 92.60%/96.19%/94.31%
 - [ ] **Step 3: 全部完成後跑全量煙霧測試**
 
 ```bash
