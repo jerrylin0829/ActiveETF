@@ -15,7 +15,7 @@ class EtfEntry:
 
 
 REGISTRY: list[EtfEntry] = [
-    EtfEntry("00400A", "主動國泰動能高息", "國泰", "tw", None, None),
+    EtfEntry("00400A", "主動國泰動能高息", "國泰", "tw", "https://www.cathaysite.com.tw/ETF/purchase?code=EA", "cathay"),
     EtfEntry("00401A", "主動摩根台灣鑫收", "摩根", "tw", "https://cdn.jpmorganfunds.com/content/dam/jpm-am-aem/asiapacific/tw/zh/regulatory/etf-supplement/jpm_apac_tw_etf_pcf_updates_00401A_TW00000401A1.xlsx", "jpm"),
     EtfEntry("00402A", "主動安聯美國科技", "安聯", "global", "https://etf.allianzgi.com.tw/list-trade", "allianz"),
     EtfEntry("00403A", "主動統一升級50", "統一", "tw", "https://www.ezmoney.com.tw/ETF/Transaction/PCF?fundCode=63YTW", "uni"),

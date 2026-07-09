@@ -966,14 +966,14 @@ if __name__ == "__main__":
 
 ---
 
-### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 已完成 27 檔 ETF，尚餘 1 檔 ETF
+### Task 12: 其餘投信 adapter（逐家循環） ✅ 完成 — 28 檔 ETF 全數接通官方來源
 
 **Files:** Create: `scraper/src/activeetf/adapters/<issuer>.py` × 每家、對應 fixture 與測試
 
 這是本計畫工作量最大的部分，但**每家都走 Task 10 的固定四步**（錄 fixture → 不變量測試 → 實作 → 真連線驗證），不變量測試的內容完全相同（複製 `test_adapter_capital.py` 改名）。無法在本文件預寫各家解析程式碼——各家 HTML/API 結構必須實地錄下 fixture 才知道，預寫等於捏造。
 
-- [ ] **Step 1: 依 Task 8 探測結果排定順序**：靜態 HTML/JSON API 的先做（快），需要 JS 渲染的最後做（可能要 playwright，屆時再加依賴——YAGNI）
-- [ ] **Step 2: 每完成一家：更新 registry 的 pcf_url + adapter 欄、跑該家煙霧測試、單獨 commit**（`feat: <投信> adapter`）
+- [x] **Step 1: 依 Task 8 探測結果排定順序**：靜態 HTML/JSON API 的先做（快），需要 JS 渲染的最後做（可能要 playwright，屆時再加依賴——YAGNI）
+- [x] **Step 2: 每完成一家：更新 registry 的 pcf_url + adapter 欄、跑該家煙霧測試、單獨 commit**（`feat: <投信> adapter`）
   - [x] 野村：00980A / 00985A / 00999A，官方 API `Fund/GetFundTradeInfoDate` + `Fund/GetFundTradeInfo`；live smoke：48/50/61 檔，權重 90.86%/92.26%/96.19%
   - [x] 台新：00986A / 00987A，官方 ETF detail HTML 靜態表格；live smoke：32/28 檔，權重 92.02%/96.11%；00986A 確認為 global universe，00987A 台股代號需移除 ` TT` suffix
   - [x] 富邦：00405A，官方 `Assets.aspx` 靜態表格；live smoke：50 檔，權重 95.87%
@@ -987,7 +987,8 @@ if __name__ == "__main__":
   - [x] 聯博：00404A，官方 `webapi.alliancebernstein.com` 完整 holdings JSON API（只取股票區塊）；live smoke：50 檔，權重 89.13%
   - [x] 統一：00403A / 00981A / 00988A，官方 PCF 頁 bootstrap cookie 後呼叫 `Transaction/GetPCF` JSON API（只取股票資產）；live smoke：46/35/42 檔，權重 92.60%/96.19%/94.31%
   - [x] 摩根：00401A / 00989A，官方每日 PCF xlsx（以個股市值除基金總市值換算權重，只取 Equity）；live smoke：65/60 檔，權重 93.08%/100.00%
-- [ ] **Step 3: 全部完成後跑全量煙霧測試**
+  - [x] 國泰：00400A，官方 `GetETFInfoMain` 取得最新淨值日，再下載 `DownloadETFWeightExcel` 完整持股 xlsx；live smoke：57 檔，權重 91.96%
+- [x] **Step 3: 全部完成後跑全量煙霧測試** → 28 檔全數筆數 >10、權重和 70–101
 
 ```bash
 uv run python -c "
@@ -1002,7 +1003,7 @@ for e in entries():
 
 Expected: 每檔筆數 >10、權重和 70–101。
 - [x] **Step 4: 完成第 3 家後，依 CLAUDE.md 的約定建立 `new-adapter` 專案 skill**（此時流程已被實走多遍，符合 writing-skills 的測試前提）
-- [ ] **Step 5: Commit**（每家一個，已含在 Step 2）
+- [x] **Step 5: Commit**（每家一個，已含在 Step 2）
 
 ---
 
