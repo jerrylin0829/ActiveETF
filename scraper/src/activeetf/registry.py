@@ -19,7 +19,7 @@ REGISTRY: list[EtfEntry] = [
     EtfEntry("00401A", "主動摩根台灣鑫收", "摩根", "tw", None, None),
     EtfEntry("00402A", "主動安聯美國科技", "安聯", "global", "https://etf.allianzgi.com.tw/list-trade", "allianz"),
     EtfEntry("00403A", "主動統一升級50", "統一", "tw", None, None),
-    EtfEntry("00404A", "主動聯博動能50", "聯博", "tw", None, None),
+    EtfEntry("00404A", "主動聯博動能50", "聯博", "tw", "https://www.abfunds.com.tw/zh-tw/etfs/pcf.TW00000404A5.html", "ab"),
     EtfEntry("00405A", "主動富邦台灣龍耀", "富邦", "tw", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=00405A&lan=TW", "fubon"),
     EtfEntry("00406A", "主動中信台灣收益", "中信", "tw", "https://www.ctbcinvestments.com/Etf/Buyback", "ctbc"),
     EtfEntry("00407A", "主動凱基台灣", "凱基", "tw", "https://www.kgifund.com.tw/Fund/Detail?fundID=J024", "kgi"),
