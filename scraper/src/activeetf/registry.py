@@ -33,7 +33,7 @@ REGISTRY: list[EtfEntry] = [
     EtfEntry("00987A", "主動台新優勢成長", "台新", "tw", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00987A", "tsit"),
     EtfEntry("00988A", "主動統一全球創新", "統一", "global", None, None),
     EtfEntry("00989A", "主動摩根美國科技", "摩根", "global", None, None),
-    EtfEntry("00990A", "主動元大AI新經濟", "元大", "tw", None, None),  # universe 待確認：名稱未明示市場，首抓時驗證
+    EtfEntry("00990A", "主動元大AI新經濟", "元大", "global", "https://www.yuantaetfs.com/tradeInfo/pcf/00990A", "yuanta"),
     EtfEntry("00991A", "主動復華未來50", "復華", "tw", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF23", "fuhua"),
     EtfEntry("00992A", "主動群益科技創新", "群益", "tw", "https://www.capitalfund.com.tw/etf/product/detail/500/portfolio", "capital"),
     EtfEntry("00993A", "主動安聯台灣", "安聯", "tw", None, None),
