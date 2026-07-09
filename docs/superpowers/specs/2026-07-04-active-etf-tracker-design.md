@@ -29,6 +29,8 @@
 **行情資料**：FinMind 為主（可回補歷史、上市上櫃一個 dataset 全包、有含息的加權報酬指數 `TaiwanStockTotalReturnIndex`；每日僅需 2–3 次呼叫，免費層 600 次/時綽綽有餘），TWSE OpenAPI 作備援介面。
 
 > 2026-07-07 實作查證：`TaiwanStockTotalReturnIndex` 以目前 token 可真呼叫，值欄位為 `price`；但 `TaiwanStockPrice` 與 `TaiwanStockPriceAdj` 真呼叫皆回 400，訊息為目前帳號等級不足，且 FinMind 官方文件標示還原股價 dataset 只限 backer/sponsor 會員使用。此處不可改用未還原價替代，因 spec §6 明定所有報酬用還原價；上線前需決定升級 FinMind、改接其他免費價格來源，或自建除權息還原流程。
+>
+> 2026-07-09 決策：不升級 FinMind。改用 **yfinance**（`.TW`/`.TWO` 代號）取得還原價序列，取代 `finmind.adj_prices()` 的資料源。FinMind 繼續負責 `TaiwanStockTotalReturnIndex`（TAIEX_TRI，已驗證可用）與 `TaiwanStockInfo`（代號/產業對照）。取捨：yfinance 為非官方套件，Yahoo 改版時可能失效，且非全部台股代號皆有資料（缺資料時該檔的個股層級指標從缺，比照海外持股的既有處理方式）；換來的是免費、零工程量的還原價來源，不必自建除權息還原邏輯。
 
 ## 3. 整體架構
 
