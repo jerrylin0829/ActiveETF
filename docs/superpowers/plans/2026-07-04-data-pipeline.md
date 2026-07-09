@@ -966,7 +966,7 @@ if __name__ == "__main__":
 
 ---
 
-### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 已完成 14 檔 ETF，尚餘 14 檔 ETF
+### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 已完成 15 檔 ETF，尚餘 13 檔 ETF
 
 **Files:** Create: `scraper/src/activeetf/adapters/<issuer>.py` × 每家、對應 fixture 與測試
 
@@ -981,6 +981,7 @@ if __name__ == "__main__":
   - [x] 第一金：00994A，官方 `WebAPI.aspx/Get_hd`；live smoke：36 檔，權重 95.66%
   - [x] 凱基：00407A，官方 Fund detail 靜態表格（頁面含重複 RWD 表格，adapter 依股票代號去重）；live smoke：50 檔，權重 91.18%
   - [x] 元大：00990A，官方 `ectranslation/api/bridge` 的 `PCF/Daily` JSON API；live smoke：46 檔，權重 92.73%；確認為 global universe
+  - [x] 兆豐：00996A，官方 ASP.NET 申購買回清單（POST 選擇主動式 ETF `fund_id=23`）；live smoke：50 檔，權重 93.99%
 - [ ] **Step 3: 全部完成後跑全量煙霧測試**
 
 ```bash
