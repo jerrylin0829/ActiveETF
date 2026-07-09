@@ -73,7 +73,7 @@ git add scraper && git commit -m "feat: scraper 專案 scaffold（uv + pytest）
 
 ---
 
-### Task 2: 資料庫 schema ⚠️ migration 已寫入，Supabase 套用待 `SUPABASE_DB_URL`
+### Task 2: 資料庫 schema ✅ 完成（2026-07-09，透過 Supabase transaction pooler 套用）
 
 **Files:** Create: `scraper/migrations/001_schema.sql`
 
@@ -157,7 +157,7 @@ begin
 end $$;
 ```
 
-- [ ] **Step 2: 套用到 Supabase 並驗證** — 待 `SUPABASE_DB_URL`
+- [x] **Step 2: 套用到 Supabase 並驗證**（無 `psql`，改用 `uv run python` + psycopg 執行 SQL；連線用 Transaction pooler，因直連 host 只提供 IPv6 在此網路環境無法解析）
 
 ```bash
 psql "$SUPABASE_DB_URL" -f scraper/migrations/001_schema.sql
@@ -472,13 +472,15 @@ Expected: 一個 > 1000 的數字（全市場檔數）。**注意**：若 `Taiwa
 
 ---
 
-### Task 7: db — 持久層
+### Task 7: db — 持久層 ✅ 完成（2026-07-09）
 
 **Files:** Create: `scraper/src/activeetf/db.py`, Test: `scraper/tests/test_db.py`
 
 原則：唯一碰 SQL 的模組；業務邏輯（validate/diff/metrics）全部與 DB 解耦。整合測試需要 `SUPABASE_DB_URL`，沒有就 skip。
 
-- [ ] **Step 1: 失敗測試**
+**與計畫的落差**：`psycopg.connect` 需額外加 `prepare_threshold=None`——Supabase transaction pooler（pgbouncer transaction mode）不支援 server-side prepared statements，不關閉會在 `executemany` 偶發 `DuplicatePreparedStatement`。
+
+- [x] **Step 1: 失敗測試**
 
 ```python
 # tests/test_db.py
@@ -513,8 +515,8 @@ def test_scrape_log_roundtrip():
     assert db.scraped_ok("_TEST", D) is False
 ```
 
-- [ ] **Step 2: 確認失敗** → FAIL
-- [ ] **Step 3: 實作**
+- [x] **Step 2: 確認失敗** → FAIL
+- [x] **Step 3: 實作**
 
 ```python
 # src/activeetf/db.py
@@ -525,7 +527,9 @@ from activeetf.models import Holding, Change
 
 @contextmanager
 def conn():
-    with psycopg.connect(os.environ["SUPABASE_DB_URL"], autocommit=True) as c:
+    # prepare_threshold=None: transaction pooler 不支援 server-side prepared statements
+    with psycopg.connect(os.environ["SUPABASE_DB_URL"], autocommit=True,
+                         prepare_threshold=None) as c:
         yield c
 
 def write_snapshot(etf_id: str, d: dt.date, holdings: list[Holding]) -> None:
@@ -597,8 +601,8 @@ def scraped_ok(etf_id: str, d: dt.date) -> bool:
     return row is not None
 ```
 
-- [ ] **Step 4: 確認通過** → `uv run pytest tests/test_db.py -v` → PASS（有 env 時）
-- [ ] **Step 5: Commit** → `git commit -am "feat: db 持久層（快照/事件/價格/log）"`
+- [x] **Step 4: 確認通過** → `uv run pytest tests/test_db.py -v` → PASS（2/2，全套 61 passed）
+- [x] **Step 5: Commit** → `git commit -am "feat: db 持久層（快照/事件/價格/log）"`
 
 ---
 
