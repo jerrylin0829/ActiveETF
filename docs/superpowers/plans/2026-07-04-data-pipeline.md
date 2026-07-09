@@ -1011,7 +1011,7 @@ Expected: 每檔筆數 >10、權重和 70–101。
 
 ---
 
-### Task 13: metrics — 報酬與擇時勝率（spec §6） ⚠️ 程式與測試完成，FinMind 還原價 endpoint 受帳號等級阻擋
+### Task 13: metrics — 報酬與擇時勝率（spec §6） ✅ 完成（還原價來源已於 2026-07-09 改用 yfinance 解套）
 
 **Files:** Create: `scraper/src/activeetf/metrics.py`, Test: `scraper/tests/test_metrics.py`
 
@@ -1346,7 +1346,7 @@ def style_metrics(etf_id: str, today: dt.date) -> dict:
 
 ---
 
-### Task 15: backfill — 一次性股價回補 ⚠️ 腳本與測試完成，真執行待 DB 與還原價權限
+### Task 15: backfill — 一次性股價回補 ✅ 完成（2026-07-09，還原價改用 yfinance 後執行成功）
 
 **Files:** Create: `scraper/scripts/backfill.py`
 
@@ -1376,14 +1376,13 @@ db.upsert_prices([(finmind.TAIEX_TRI, r["date"], None, r["price"]) for r in tri]
 print(f"TAIEX_TRI: {len(tri)} rows")
 ```
 
-- [ ] **Step 2: 執行並驗證** — 待 `SUPABASE_DB_URL`，且目前 `TaiwanStockPriceAdj` 受 FinMind 帳號等級阻擋
+- [x] **Step 2: 執行並驗證**（無 `psql`，改用 Python + psycopg 查驗；`START` 用 2025-05-01 但 yfinance 對多數標的實際只回傳近期資料，非上市日起全部區間）
 
 ```bash
 uv run python scripts/backfill.py
-psql "$SUPABASE_DB_URL" -c "select stock_id, count(*) from stock_price group by 1 order by 1 limit 40"
 ```
 
-Expected: 每檔 ETF 依上市日有數十到 200+ 筆；0050 與 TAIEX_TRI 約 280+ 筆。
+實際結果：30 個標的（28 檔 ETF + 0050 + TAIEX_TRI）、共 4262 筆寫入 `stock_price`。0050／TAIEX_TRI 各 291 筆；ETF 依上市早晚 18～291 筆不等。00998A 的 `.TW` 404，經 `.TWO` 後綴 fallback 成功（69 筆）。
 - [x] **Step 3: Commit** → `git commit -m "feat: 股價一次性回補腳本"`
 
 ---
