@@ -966,7 +966,7 @@ if __name__ == "__main__":
 
 ---
 
-### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 已完成 18 檔 ETF，尚餘 10 檔 ETF
+### Task 12: 其餘投信 adapter（逐家循環） ⏳ 進行中 — 已完成 21 檔 ETF，尚餘 7 檔 ETF
 
 **Files:** Create: `scraper/src/activeetf/adapters/<issuer>.py` × 每家、對應 fixture 與測試
 
@@ -983,6 +983,7 @@ if __name__ == "__main__":
   - [x] 元大：00990A，官方 `ectranslation/api/bridge` 的 `PCF/Daily` JSON API；live smoke：46 檔，權重 92.73%；確認為 global universe
   - [x] 兆豐：00996A，官方 ASP.NET 申購買回清單（POST 選擇主動式 ETF `fund_id=23`）；live smoke：50 檔，權重 93.99%
   - [x] 中信：00406A / 00983A / 00995A，官方 `home/AuthToken` + `etf/Buyback` JSON API；live smoke：50/37/53 檔，權重 82.77%/95.58%/95.39%
+  - [x] 安聯：00402A / 00984A / 00993A，官方 `AntiForgery/GetAntiForgeryToken` + `Fund/GetFundTradeInfo` JSON API；live smoke：51/119/50 檔，權重 97.52%/96.55%/96.34%
 - [ ] **Step 3: 全部完成後跑全量煙霧測試**
 
 ```bash
