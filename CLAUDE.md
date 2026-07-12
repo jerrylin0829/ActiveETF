@@ -18,7 +18,7 @@ GitHub Actions（每日 18:30 主場 + 21:30 補抓）
 ```
 
 - 持股明細（PCF）**只能爬各投信官網**——FinMind、TWSE OpenAPI、SITCA 都沒有這個資料（已查證，見 spec §2），不要再花時間找現成 API
-- 行情資料用 FinMind（還原價、加權報酬指數），TWSE OpenAPI 為備援
+- 還原價用 yfinance（FinMind 免費層無此權限，見 spec §2 2026-07-09 決策）；加權報酬指數（TAIEX_TRI）、stock_info、單檔交易日判斷用 FinMind；TWSE OpenAPI 為備援
 - 計算一律在寫入時做（pipeline），前端只 SELECT
 
 ## 不可違背的資料原則
@@ -40,11 +40,28 @@ GitHub Actions（每日 18:30 主場 + 21:30 補抓）
 - Commit 格式：`type: 中文描述`（現有歷史用 `docs:`，之後 `feat:`/`fix:` 依此類推）
 - 漲跌標色遵循台股習慣：**紅漲綠跌**
 
+## Agent 協作流程
+
+本專案採輕量 agent harness：User 負責調度與裁決，Claude Code 預設當 Planner，Codex 可分成 Generator / Evaluator 兩個 session。流程與模板見：
+
+- `docs/superpowers/specs/2026-07-12-agent-workflow-design.md`
+- `docs/superpowers/process/agent-workflow.md`
+- `docs/superpowers/process/pr-review-checklist.md`
+- `docs/superpowers/templates/generator-handoff.md`
+- `docs/superpowers/templates/evaluator-review.md`
+
+先用文件化輕量版實戰 2–3 個 PR；若協作規則穩定且重複，再升級正式版流程；正式版再穩定後才做專案 skill。
+
 ## 目前狀態與指令
 
-專案在設計階段，尚未 scaffold——目前 repo 只有 spec。下一步是用 writing-plans 產出實作計畫。**開始實作後，把 build/test/lint 指令補進本檔**（預期：`scraper/` 用 uv + pytest；`web/` 用 Next.js 慣例指令）。
+資料 pipeline（爬蟲 + Supabase + 每日排程）已完成並上線，見 `docs/superpowers/plans/2026-07-04-data-pipeline.md`（Task 1–16 全數完成）。前端 Dashboard（`web/`，spec §7）尚未開工，屬下一個計畫。
 
-裝 Python 套件用 `uv`，不用 pip。
+爬蟲指令（在 `scraper/` 下）：
+- 測試：`uv run pytest`（需 DB 的整合測試在無 `SUPABASE_DB_URL` 時自動 skip；本機要跑真整合測試先 `set -a && source .env.local && set +a`）
+- 每日流程：`uv run python -m activeetf.pipeline`
+- 股價回補（一次性）：`uv run python scripts/backfill.py`
+
+裝 Python 套件用 `uv`，不用 pip。`.env.local` 放在 `scraper/` 下（已於 `scraper/.gitignore` 忽略）。
 
 **預定建立的專案 skills**（等對應程式碼存在、流程被實際走過一遍後再建，屆時依 writing-skills 的測試流程）：
 - `new-adapter`：新增一家投信 PCF adapter 的完整流程（探測、解析、三道驗證、registry 註冊、測試）
