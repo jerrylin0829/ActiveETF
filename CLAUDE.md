@@ -54,9 +54,14 @@ GitHub Actions（每日 18:30 主場 + 21:30 補抓）
 
 ## 目前狀態與指令
 
-專案在設計階段，尚未 scaffold——目前 repo 只有 spec。下一步是用 writing-plans 產出實作計畫。**開始實作後，把 build/test/lint 指令補進本檔**（預期：`scraper/` 用 uv + pytest；`web/` 用 Next.js 慣例指令）。
+資料 pipeline（爬蟲 + Supabase + 每日排程）已完成並上線，見 `docs/superpowers/plans/2026-07-04-data-pipeline.md`（Task 1–16 全數完成）。前端 Dashboard（`web/`，spec §7）尚未開工，屬下一個計畫。
 
-裝 Python 套件用 `uv`，不用 pip。
+爬蟲指令（在 `scraper/` 下）：
+- 測試：`uv run pytest`（需 DB 的整合測試在無 `SUPABASE_DB_URL` 時自動 skip；本機要跑真整合測試先 `set -a && source .env.local && set +a`）
+- 每日流程：`uv run python -m activeetf.pipeline`
+- 股價回補（一次性）：`uv run python scripts/backfill.py`
+
+裝 Python 套件用 `uv`，不用 pip。`.env.local` 放在 `scraper/` 下（已於 `scraper/.gitignore` 忽略）。
 
 **預定建立的專案 skills**（等對應程式碼存在、流程被實際走過一遍後再建，屆時依 writing-skills 的測試流程）：
 - `new-adapter`：新增一家投信 PCF adapter 的完整流程（探測、解析、三道驗證、registry 註冊、測試）

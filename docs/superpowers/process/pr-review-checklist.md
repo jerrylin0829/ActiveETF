@@ -30,6 +30,7 @@ Evaluator review 先列 blocker，再列 non-blocking issue。沒有 blocker 時
 - GitHub Actions 排程、timeout、失敗告警是否符合預期。
 - 需要 secret 的流程是否有文件與安全邊界。
 - 測試是否涵蓋新行為與主要 failure mode。
+- 涉及 DB 寫入或外部依賴（Supabase、FinMind、yfinance、投信官網）的變更，是否附整合或 smoke test 證據——只讀 diff 抓不到外鍵、schema、真連線層級的 bug（實例：`etf` 母表未播種導致 `holdings_snapshot` 外鍵失敗，單元測試全綠仍漏，見 commit 7c5bac2）。
 - 文件、commit message、UI 文案是否使用繁體中文。
 
 ## Review output
