@@ -14,6 +14,19 @@ def conn():
         yield c
 
 
+def sync_etf(entries) -> None:
+    """把 registry 的 ETF metadata 冪等同步進 etf 表。holdings_snapshot 等表對 etf
+    有外鍵，pipeline 寫入前必須先確保母表存在對應列。registry 為事實來源，每次
+    覆蓋 name/issuer/universe/pcf_url。"""
+    with conn() as c, c.cursor() as cur:
+        cur.executemany(
+            """insert into etf (etf_id, name, issuer, universe, pcf_url)
+               values (%s,%s,%s,%s,%s) on conflict (etf_id) do update
+               set name=excluded.name, issuer=excluded.issuer,
+                   universe=excluded.universe, pcf_url=excluded.pcf_url""",
+            [(e.etf_id, e.name, e.issuer, e.universe, e.pcf_url) for e in entries])
+
+
 def write_snapshot(etf_id: str, d: dt.date, holdings: list[Holding]) -> None:
     with conn() as c, c.cursor() as cur:
         cur.executemany(

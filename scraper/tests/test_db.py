@@ -27,3 +27,13 @@ def test_snapshot_roundtrip():
 def test_scrape_log_roundtrip():
     db.log_scrape("_TEST", D, "fail", "boom")
     assert db.scraped_ok("_TEST", D) is False
+
+
+def test_sync_etf_is_idempotent_upsert():
+    from activeetf.registry import EtfEntry
+    e = EtfEntry("_TEST", "測試", "測投信", "tw", "http://x", "capital")
+    db.sync_etf([e])
+    db.sync_etf([EtfEntry("_TEST", "測試改名", "測投信", "tw", "http://y", "capital")])
+    with db.conn() as c:
+        row = c.execute("select name, pcf_url from etf where etf_id='_TEST'").fetchone()
+    assert row == ("測試改名", "http://y")   # 第二次 upsert 覆蓋，不重複插入

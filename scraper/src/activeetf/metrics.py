@@ -89,7 +89,10 @@ def load_adj_series(stock_id: str, start: dt.date, end: dt.date) -> Series:
             (stock_id, start, end),
         ).fetchall()
     s = {r[0]: float(r[1]) for r in rows}
-    if not s or max(s) < end - dt.timedelta(days=3):
+    # compute_all 只在交易日收盤後跑（main 有 is_trading_day 閘），所以 end=today
+    # 本身就是交易日；快取缺 today 當日價即視為過期須補抓。用 <end 而非 end-3天，
+    # 否則週一會把上週五誤判為新鮮而漏抓當日還原價。
+    if not s or max(s) < end:
         fetched = finmind.adj_prices(stock_id, str(start), str(end))
         db.upsert_prices(
             [(r["stock_id"], r["date"], None, r.get("close")) for r in fetched]
@@ -107,7 +110,7 @@ def load_tri_series(start: dt.date, end: dt.date) -> Series:
             (finmind.TAIEX_TRI, start, end),
         ).fetchall()
     s = {r[0]: float(r[1]) for r in rows}
-    if not s or max(s) < end - dt.timedelta(days=3):
+    if not s or max(s) < end:   # 同 load_adj_series：缺 end 當日即補抓（見上方說明）
         fetched = finmind.total_return_index(str(start), str(end))
         db.upsert_prices(
             [(finmind.TAIEX_TRI, r["date"], None, r["price"]) for r in fetched]

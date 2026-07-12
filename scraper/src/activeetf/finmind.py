@@ -1,8 +1,10 @@
-"""FinMind 行情 client。每日用量：market_close 1 次 + adj_prices 若干 + index 1 次，
+"""FinMind 行情 client。免費層可用範圍：TaiwanStockPrice 帶 data_id 的單檔查詢
+（is_trading_day 用）、TaiwanStockTotalReturnIndex、TaiwanStockInfo。每日僅數次呼叫，
 遠低於免費層 600 次/時。TWSE OpenAPI 備援屬後續擴充（spec §9）。
 
 還原價（adj_prices）改用 yfinance：FinMind 免費層 TaiwanStockPriceAdj 需
-backer/sponsor 會員，不符合 $0/月營運目標（spec §2 2026-07-09 決策）。"""
+backer/sponsor 會員；全市場 TaiwanStockPrice（不帶 data_id）亦回 400。皆為
+$0/月營運目標下的限制（spec §2 2026-07-09 決策）。"""
 import datetime as dt
 import os
 import requests
@@ -19,10 +21,6 @@ def _get(params: dict) -> list[dict]:
     if body.get("status") != 200:
         raise RuntimeError(f"FinMind error: {body.get('msg')}")
     return body["data"]
-
-def market_close(date: str) -> list[dict]:
-    """當日全市場收盤價（單次呼叫）。"""
-    return _get({"dataset": "TaiwanStockPrice", "start_date": date, "end_date": date})
 
 def adj_prices(stock_id: str, start: str, end: str) -> list[dict]:
     """單一標的還原價序列（報酬/勝率計算用）。依序試 .TW（上市）/.TWO（上櫃），

@@ -46,26 +46,24 @@ def refresh_stock_info() -> None:
             for r in finmind.stock_info()]
     db.upsert_stock_info(rows)
 
-def ingest_prices(today: dt.date) -> None:
-    """當日全市場收盤 1 次呼叫入庫；還原價與指數由 metrics 階段按需拉（Task 13）。"""
-    rows = [(r["stock_id"], r["date"], r.get("close"), None) for r in finmind.market_close(str(today))]
-    db.upsert_prices(rows)
-
 def main() -> int:
     today = dt.date.today()
     if not finmind.is_trading_day(str(today)):
         print(f"{today} 非交易日，跳過")
         return 0
+    db.sync_etf(entries())   # 先播種 etf 母表，holdings_snapshot 外鍵才有對應列
     refresh_stock_info()
     deps = Deps()
     for entry in entries():
         scrape_one(entry, today, deps)
         time.sleep(1.5)
-    ingest_prices(today)
-    metrics.compute_all(today)
-    failed = [e.etf_id for e in entries() if not db.scraped_ok(e.etf_id, today)]
-    print(f"完成。失敗/未實作: {failed}")
-    return 1 if len(failed) == len(list(entries())) else 0   # 全滅才讓 job 紅
+    metrics.compute_all(today)   # 還原價/指數由 metrics 按需向 yfinance/FinMind 拉並快取
+    # 只把「已實作的 adapter」納入成敗判定：未實作者本就會 log fail，不該稀釋全滅判斷。
+    # 注意：部分失敗目前只落在 scrape_log，Dashboard 黃條尚未實作，故僅全滅時讓 job 紅。
+    implemented = [e for e in entries() if e.adapter and e.pcf_url]
+    failed = [e.etf_id for e in implemented if not db.scraped_ok(e.etf_id, today)]
+    print(f"完成。已實作 {len(implemented)} 檔，失敗 {len(failed)}: {failed}")
+    return 1 if implemented and len(failed) == len(implemented) else 0   # 已實作者全滅才讓 job 紅
 
 if __name__ == "__main__":
     raise SystemExit(main())
