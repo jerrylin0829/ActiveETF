@@ -18,7 +18,7 @@ GitHub Actions（每日 18:30 主場 + 21:30 補抓）
 ```
 
 - 持股明細（PCF）**只能爬各投信官網**——FinMind、TWSE OpenAPI、SITCA 都沒有這個資料（已查證，見 spec §2），不要再花時間找現成 API
-- 行情資料用 FinMind（還原價、加權報酬指數），TWSE OpenAPI 為備援
+- 還原價用 yfinance（FinMind 免費層無此權限，見 spec §2 2026-07-09 決策）；加權報酬指數（TAIEX_TRI）、stock_info、單檔交易日判斷用 FinMind；TWSE OpenAPI 為備援
 - 計算一律在寫入時做（pipeline），前端只 SELECT
 
 ## 不可違背的資料原則
