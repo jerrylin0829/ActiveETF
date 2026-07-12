@@ -40,6 +40,18 @@ GitHub Actions（每日 18:30 主場 + 21:30 補抓）
 - Commit 格式：`type: 中文描述`（現有歷史用 `docs:`，之後 `feat:`/`fix:` 依此類推）
 - 漲跌標色遵循台股習慣：**紅漲綠跌**
 
+## Agent 協作流程
+
+本專案採輕量 agent harness：User 負責調度與裁決，Claude Code 預設當 Planner，Codex 可分成 Generator / Evaluator 兩個 session。流程與模板見：
+
+- `docs/superpowers/specs/2026-07-12-agent-workflow-design.md`
+- `docs/superpowers/process/agent-workflow.md`
+- `docs/superpowers/process/pr-review-checklist.md`
+- `docs/superpowers/templates/generator-handoff.md`
+- `docs/superpowers/templates/evaluator-review.md`
+
+先用文件化輕量版實戰 2–3 個 PR；若協作規則穩定且重複，再升級正式版流程；正式版再穩定後才做專案 skill。
+
 ## 目前狀態與指令
 
 專案在設計階段，尚未 scaffold——目前 repo 只有 spec。下一步是用 writing-plans 產出實作計畫。**開始實作後，把 build/test/lint 指令補進本檔**（預期：`scraper/` 用 uv + pytest；`web/` 用 Next.js 慣例指令）。
