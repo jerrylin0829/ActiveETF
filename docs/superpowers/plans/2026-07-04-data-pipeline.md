@@ -1387,7 +1387,7 @@ uv run python scripts/backfill.py
 
 ---
 
-### Task 16: GitHub Actions 排程 ⚠️ workflow 已寫入，遠端驗證待 GitHub secrets
+### Task 16: GitHub Actions 排程 ✅ 完成（2026-07-12，secrets 已設、PR #1 merge、手動觸發驗證成功）
 
 **Files:** Create: `.github/workflows/daily.yml`
 
@@ -1429,7 +1429,7 @@ jobs:
             });
 ```
 
-- [ ] **Step 2: 推上 GitHub 後手動觸發驗證** — 待 GitHub secrets / push 後驗證
+- [x] **Step 2: 推上 GitHub 後手動觸發驗證**（2026-07-12，PR #1 merge 進 main 後觸發，run 29190631494 success；當天為非交易日，`is_trading_day()` 正確提早跳過——secrets 注入、uv 環境建置、排程機制皆確認可用。完整 scrape+metrics 路徑於下一交易日排程自動驗證，或已於本機真連線測試過，見 c79362f/7c5bac2）
 
 ```bash
 git add .github && git commit -m "feat: GitHub Actions 每日排程（18:30/21:30 台北）"
