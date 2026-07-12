@@ -1,0 +1,56 @@
+"""ETF ↔ 投信 ↔ adapter ↔ PCF URL 對照。
+新 ETF 上市：同投信加一行；新投信：寫新 adapter（見 CLAUDE.md 預定 skill new-adapter）。
+adapter=None 表示尚未實作——pipeline 會跳過並記 fail，Dashboard 黃條可見。"""
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class EtfEntry:
+    etf_id: str
+    name: str
+    issuer: str
+    universe: str        # 'tw' | 'global'
+    pcf_url: str | None
+    adapter: str | None  # adapters/ 下的模組名
+
+
+REGISTRY: list[EtfEntry] = [
+    EtfEntry("00400A", "主動國泰動能高息", "國泰", "tw", "https://www.cathaysite.com.tw/ETF/purchase?code=EA", "cathay"),
+    EtfEntry("00401A", "主動摩根台灣鑫收", "摩根", "tw", "https://cdn.jpmorganfunds.com/content/dam/jpm-am-aem/asiapacific/tw/zh/regulatory/etf-supplement/jpm_apac_tw_etf_pcf_updates_00401A_TW00000401A1.xlsx", "jpm"),
+    EtfEntry("00402A", "主動安聯美國科技", "安聯", "global", "https://etf.allianzgi.com.tw/list-trade", "allianz"),
+    EtfEntry("00403A", "主動統一升級50", "統一", "tw", "https://www.ezmoney.com.tw/ETF/Transaction/PCF?fundCode=63YTW", "uni"),
+    EtfEntry("00404A", "主動聯博動能50", "聯博", "tw", "https://www.abfunds.com.tw/zh-tw/etfs/pcf.TW00000404A5.html", "ab"),
+    EtfEntry("00405A", "主動富邦台灣龍耀", "富邦", "tw", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=00405A&lan=TW", "fubon"),
+    EtfEntry("00406A", "主動中信台灣收益", "中信", "tw", "https://www.ctbcinvestments.com/Etf/Buyback", "ctbc"),
+    EtfEntry("00407A", "主動凱基台灣", "凱基", "tw", "https://www.kgifund.com.tw/Fund/Detail?fundID=J024", "kgi"),
+    EtfEntry("00980A", "主動野村臺灣優選", "野村", "tw", "https://www.nomurafunds.com.tw/ETFWEB/pcf", "nomura"),
+    EtfEntry("00981A", "主動統一台股增長", "統一", "tw", "https://www.ezmoney.com.tw/ETF/Transaction/PCF?fundCode=49YTW", "uni"),
+    EtfEntry("00982A", "主動群益台灣強棒", "群益", "tw", "https://www.capitalfund.com.tw/etf/product/detail/399/portfolio", "capital"),
+    EtfEntry("00983A", "主動中信ARK創新", "中信", "global", "https://www.ctbcinvestments.com/Etf/Buyback", "ctbc"),
+    EtfEntry("00984A", "主動安聯台灣高息", "安聯", "tw", "https://etf.allianzgi.com.tw/list-trade", "allianz"),
+    EtfEntry("00985A", "主動野村台灣50", "野村", "tw", "https://www.nomurafunds.com.tw/ETFWEB/pcf", "nomura"),
+    EtfEntry("00986A", "主動台新龍頭成長", "台新", "global", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00986A", "tsit"),
+    EtfEntry("00987A", "主動台新優勢成長", "台新", "tw", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00987A", "tsit"),
+    EtfEntry("00988A", "主動統一全球創新", "統一", "global", "https://www.ezmoney.com.tw/ETF/Transaction/PCF?fundCode=61YTW", "uni"),
+    EtfEntry("00989A", "主動摩根美國科技", "摩根", "global", "https://cdn.jpmorganfunds.com/content/dam/jpm-am-aem/asiapacific/tw/zh/regulatory/etf-supplement/jpm_apac_tw_etf_pcf_updates_00989A_TW00000989A5.xlsx", "jpm"),
+    EtfEntry("00990A", "主動元大AI新經濟", "元大", "global", "https://www.yuantaetfs.com/tradeInfo/pcf/00990A", "yuanta"),
+    EtfEntry("00991A", "主動復華未來50", "復華", "tw", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF23", "fuhua"),
+    EtfEntry("00992A", "主動群益科技創新", "群益", "tw", "https://www.capitalfund.com.tw/etf/product/detail/500/portfolio", "capital"),
+    EtfEntry("00993A", "主動安聯台灣", "安聯", "tw", "https://etf.allianzgi.com.tw/list-trade", "allianz"),
+    EtfEntry("00994A", "主動第一金台股優", "第一金", "tw", "https://www.fsitc.com.tw/FundDetail.aspx?ID=182", "fsitc"),
+    EtfEntry("00995A", "主動中信台灣卓越", "中信", "tw", "https://www.ctbcinvestments.com/Etf/Buyback", "ctbc"),
+    EtfEntry("00996A", "主動兆豐台灣豐收", "兆豐", "tw", "https://www.megafunds.com.tw/MEGA/etf/trade_pcf.aspx", "mega"),
+    EtfEntry("00997A", "主動群益美國增長", "群益", "global", "https://www.capitalfund.com.tw/etf/product/detail/502/portfolio", "capital"),
+    EtfEntry("00998A", "主動復華金融股息", "復華", "global", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF24", "fuhua"),
+    EtfEntry("00999A", "主動野村臺灣高息", "野村", "tw", "https://www.nomurafunds.com.tw/ETFWEB/pcf", "nomura"),
+]
+
+
+def entries() -> list[EtfEntry]:
+    """返回全部 ETF 登錄表。"""
+    return REGISTRY
+
+
+def by_id(etf_id: str) -> EtfEntry:
+    """按代號查 ETF——無則 raise StopIteration。"""
+    return next(e for e in REGISTRY if e.etf_id == etf_id)
