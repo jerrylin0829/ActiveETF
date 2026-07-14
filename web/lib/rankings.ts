@@ -9,6 +9,22 @@ export type SortField =
 export type SortDirection = "asc" | "desc";
 export type ReturnTone = "beat-positive" | "beat-negative" | "neutral";
 
+export type DataGapWarning = {
+  title: string;
+  description: string;
+};
+
+export type DataGapInput = {
+  etfs: Array<{ etfId: string; name: string }>;
+  rows: RankingRow[];
+  scrapeFailures: Array<{
+    etfId: string;
+    tradeDate: string;
+    runAt: string;
+    error: string | null;
+  }>;
+};
+
 export type RankingRow = {
   etfId: string;
   name: string;
@@ -114,6 +130,66 @@ export function pickLatestMetrics(rows: RankingRow[]): RankingRow[] {
   }
 
   return Array.from(latest.values()).sort((a, b) => a.etfId.localeCompare(b.etfId));
+}
+
+export function getLatestTradeDate(rows: RankingRow[]): string | null {
+  return rows.reduce<string | null>(
+    (latest, row) => (latest === null || row.tradeDate > latest ? row.tradeDate : latest),
+    null,
+  );
+}
+
+function formatEtfList(items: string[]): string {
+  const visible = items.slice(0, 5);
+  const suffix = items.length > visible.length ? ` 等 ${items.length} 檔` : "";
+  return `${visible.join("、")}${suffix}`;
+}
+
+export function buildDataGapWarnings({
+  etfs,
+  rows,
+  scrapeFailures,
+}: DataGapInput): DataGapWarning[] {
+  const warnings: DataGapWarning[] = [];
+  const latestTradeDate = getLatestTradeDate(rows);
+  const rowByEtf = new Map(rows.map((row) => [row.etfId, row]));
+
+  if (latestTradeDate && etfs.length > 0) {
+    const missingLatest = etfs
+      .filter((etf) => rowByEtf.get(etf.etfId)?.tradeDate !== latestTradeDate)
+      .map((etf) => `${etf.etfId} ${etf.name}`);
+
+    if (missingLatest.length > 0) {
+      warnings.push({
+        title: "最新指標缺檔",
+        description: `最新指標日期 ${latestTradeDate} 缺少 ${missingLatest.length} 檔 ETF：${formatEtfList(missingLatest)}。`,
+      });
+    }
+
+    const staleRows = rows
+      .filter((row) => row.tradeDate < latestTradeDate)
+      .map((row) => `${row.etfId} ${row.tradeDate}`);
+
+    if (staleRows.length > 0) {
+      warnings.push({
+        title: "部分 ETF 指標過期",
+        description: `${staleRows.length} 檔 ETF 目前顯示舊資料：${formatEtfList(staleRows)}。`,
+      });
+    }
+  }
+
+  if (scrapeFailures.length > 0) {
+    const failures = scrapeFailures.map(
+      (failure) => `${failure.etfId} ${failure.tradeDate}：${failure.error ?? "未提供錯誤訊息"}`,
+    );
+
+    warnings.push({
+      title: "近期爬蟲失敗",
+      description: formatEtfList(failures) + "。",
+    });
+  }
+
+  return warnings;
 }
 
 function sortValue(row: RankingRow, field: SortField): number | null {

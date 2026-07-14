@@ -3,13 +3,14 @@ import { AlertCircle } from "lucide-react";
 import { RankingsTable } from "@/components/rankings-table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fetchRankingRows } from "@/lib/rankings-data";
+import { getLatestTradeDate } from "@/lib/rankings";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function RankingsPage() {
   const result = await fetchRankingRows();
-  const latestTradeDate = result.rows[0]?.tradeDate ?? null;
+  const latestTradeDate = getLatestTradeDate(result.rows);
 
   return (
     <main className="min-h-screen bg-background">
@@ -49,7 +50,7 @@ export default async function RankingsPage() {
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <RankingsTable rows={result.rows} error={result.error} />
+        <RankingsTable rows={result.rows} warnings={result.warnings} error={result.error} />
       </section>
     </main>
   );

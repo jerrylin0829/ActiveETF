@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildDataGapWarnings,
   buildPickingSummary,
   formatReturn,
   formatTurnover,
   formatWinRate,
+  getLatestTradeDate,
   getReturnTone,
   pickLatestMetrics,
   sortRankings,
+  type DataGapInput,
   type RankingRow,
 } from "@/lib/rankings";
 
@@ -100,5 +103,63 @@ describe("ranking row shaping", () => {
     expect(getReturnTone({ ...baseRow, ret1m: 0.01, bench00501m: 0.02 }, "ret1m")).toBe(
       "neutral",
     );
+  });
+
+  it("finds the max trade date independent of ETF-id sorting", () => {
+    expect(
+      getLatestTradeDate([
+        { ...baseRow, etfId: "00999A", tradeDate: "2026-07-09" },
+        { ...baseRow, etfId: "00400A", tradeDate: "2026-07-11" },
+      ]),
+    ).toBe("2026-07-11");
+  });
+});
+
+describe("data gap warnings", () => {
+  const gapInput: DataGapInput = {
+    etfs: [
+      { etfId: "00400A", name: "主動國泰動能高息" },
+      { etfId: "00401A", name: "主動摩根台灣鑫收" },
+      { etfId: "00402A", name: "主動安聯美國科技" },
+    ],
+    rows: [
+      { ...baseRow, etfId: "00400A", name: "主動國泰動能高息", tradeDate: "2026-07-12" },
+      { ...baseRow, etfId: "00401A", name: "主動摩根台灣鑫收", tradeDate: "2026-07-10" },
+    ],
+    scrapeFailures: [
+      {
+        etfId: "00402A",
+        tradeDate: "2026-07-12",
+        runAt: "2026-07-12T11:30:00+00:00",
+        error: "PCF 解析失敗",
+      },
+    ],
+  };
+
+  it("reports missing, stale, and scrape-failure gaps", () => {
+    expect(buildDataGapWarnings(gapInput)).toEqual([
+      {
+        title: "最新指標缺檔",
+        description: "最新指標日期 2026-07-12 缺少 2 檔 ETF：00401A 主動摩根台灣鑫收、00402A 主動安聯美國科技。",
+      },
+      {
+        title: "部分 ETF 指標過期",
+        description: "1 檔 ETF 目前顯示舊資料：00401A 2026-07-10。",
+      },
+      {
+        title: "近期爬蟲失敗",
+        description: "00402A 2026-07-12：PCF 解析失敗。",
+      },
+    ]);
+  });
+
+  it("does not report gaps when every ETF has current metrics and no scrape failures", () => {
+    expect(
+      buildDataGapWarnings({
+        etfs: [{ etfId: "00400A", name: "主動國泰動能高息" }],
+        rows: [{ ...baseRow, etfId: "00400A", name: "主動國泰動能高息" }],
+        scrapeFailures: [],
+      }),
+    ).toEqual([]);
   });
 });

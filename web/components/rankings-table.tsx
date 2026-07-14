@@ -24,6 +24,7 @@ import {
   sortRankings,
   winRateValue,
   type RankingRow,
+  type DataGapWarning,
   type ReturnField,
   type SortDirection,
   type SortField,
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
 
 type RankingsTableProps = {
   rows: RankingRow[];
+  warnings?: DataGapWarning[];
   error?: string | null;
 };
 
@@ -142,7 +144,28 @@ function PickingCell({
   );
 }
 
-export function RankingsTable({ rows, error = null }: RankingsTableProps) {
+function DataGapAlerts({ warnings }: { warnings: DataGapWarning[] }) {
+  if (warnings.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3">
+      {warnings.map((warning) => (
+        <Alert
+          key={`${warning.title}-${warning.description}`}
+          role="alert"
+          className="border-amber-300 bg-amber-50 text-amber-950"
+        >
+          <AlertTitle>{warning.title}</AlertTitle>
+          <AlertDescription>{warning.description}</AlertDescription>
+        </Alert>
+      ))}
+    </div>
+  );
+}
+
+export function RankingsTable({ rows, warnings = [], error = null }: RankingsTableProps) {
   const [sortField, setSortField] = useState<SortField>("ret1m");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
@@ -163,131 +186,139 @@ export function RankingsTable({ rows, error = null }: RankingsTableProps) {
 
   if (rows.length === 0) {
     return (
-      <Alert role="alert" className="border-amber-300 bg-amber-50 text-amber-950">
-        <AlertTitle>資料缺口</AlertTitle>
-        <AlertDescription>
-          目前尚無 ETF 指標快取資料。每日 pipeline 產生 `etf_metrics` 後，排行榜會自動顯示最新列。
-          {error ? <span className="mt-2 block">Supabase 讀取訊息：{error}</span> : null}
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-3">
+        <Alert role="alert" className="border-amber-300 bg-amber-50 text-amber-950">
+          <AlertTitle>資料缺口</AlertTitle>
+          <AlertDescription>
+            目前尚無 ETF 指標快取資料。每日 pipeline 產生 `etf_metrics` 後，排行榜會自動顯示最新列。
+            {error ? <span className="mt-2 block">Supabase 讀取訊息：{error}</span> : null}
+          </AlertDescription>
+        </Alert>
+        <DataGapAlerts warnings={warnings} />
+      </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-border bg-card">
-      <Table className="min-w-[1180px]">
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead className="sticky left-0 z-10 w-56 bg-muted/95">ETF</TableHead>
-            <TableHead className="w-28">投信</TableHead>
-            {returnColumns.map((column) => (
-              <TableHead key={column.field} className="text-right">
+    <div className="space-y-4">
+      <DataGapAlerts warnings={warnings} />
+      <div className="overflow-x-auto rounded-md border border-border bg-card">
+        <Table className="min-w-[1180px]">
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="sticky left-0 z-10 w-56 bg-muted/95">ETF</TableHead>
+              <TableHead className="w-28">投信</TableHead>
+              {returnColumns.map((column) => (
+                <TableHead key={column.field} className="text-right">
+                  <SortButton
+                    field={column.field}
+                    label={column.label}
+                    aria={column.aria}
+                    activeField={sortField}
+                    direction={sortDirection}
+                    onSort={handleSort}
+                  />
+                </TableHead>
+              ))}
+              <TableHead className="text-right">
                 <SortButton
-                  field={column.field}
-                  label={column.label}
-                  aria={column.aria}
+                  field="timingRate"
+                  label="擇時勝率"
+                  aria="擇時勝率排序"
                   activeField={sortField}
                   direction={sortDirection}
                   onSort={handleSort}
                 />
               </TableHead>
-            ))}
-            <TableHead className="text-right">
-              <SortButton
-                field="timingRate"
-                label="擇時勝率"
-                aria="擇時勝率排序"
-                activeField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead className="text-right">
-              <SortButton
-                field="pickingRealizedRate"
-                label="選股已實現"
-                aria="選股已實現勝率排序"
-                activeField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead className="text-right">
-              <SortButton
-                field="pickingOpenRate"
-                label="選股未平倉"
-                aria="選股未平倉勝率排序"
-                activeField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead className="text-right">
-              <SortButton
-                field="medianHoldingDays"
-                label="持有中位數"
-                aria="持有中位數排序"
-                activeField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-            <TableHead className="text-right">
-              <SortButton
-                field="weeklyTurnoverPct"
-                label="週換手率"
-                aria="週換手率排序"
-                activeField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedRows.map((row) => {
-            const timingRate = winRateValue(row.timingWins, row.timingMonths);
+              <TableHead className="text-right">
+                <SortButton
+                  field="pickingRealizedRate"
+                  label="選股已實現"
+                  aria="選股已實現勝率排序"
+                  activeField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortButton
+                  field="pickingOpenRate"
+                  label="選股未平倉"
+                  aria="選股未平倉勝率排序"
+                  activeField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortButton
+                  field="medianHoldingDays"
+                  label="持有中位數"
+                  aria="持有中位數排序"
+                  activeField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortButton
+                  field="weeklyTurnoverPct"
+                  label="週換手率"
+                  aria="週換手率排序"
+                  activeField={sortField}
+                  direction={sortDirection}
+                  onSort={handleSort}
+                />
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedRows.map((row) => {
+              const timingRate = winRateValue(row.timingWins, row.timingMonths);
 
-            return (
-              <TableRow key={row.etfId}>
-                <TableCell className="sticky left-0 z-10 bg-card align-top">
-                  <div className="font-mono text-sm font-semibold tabular-nums">{row.etfId}</div>
-                  <div className="mt-1 max-w-48 whitespace-normal text-sm font-medium">
-                    {row.name}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">{row.tradeDate}</div>
-                </TableCell>
-                <TableCell className="align-top text-sm text-muted-foreground">
-                  {row.issuer}
-                </TableCell>
-                {returnColumns.map((column) => (
-                  <ReturnCell key={column.field} row={row} column={column} />
-                ))}
-                <TableCell className="text-right align-top">
-                  <div className={cn("font-mono text-sm font-semibold", rateToneClass(timingRate))}>
-                    {formatWinRate(row.timingWins, row.timingMonths)}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right align-top">
-                  <PickingCell
-                    wins={row.pickingRealizedWins}
-                    total={row.pickingRealizedTotal}
-                  />
-                </TableCell>
-                <TableCell className="text-right align-top">
-                  <PickingCell wins={row.pickingOpenWins} total={row.pickingOpenTotal} />
-                </TableCell>
-                <TableCell className="text-right align-top font-mono text-sm tabular-nums">
-                  {formatNumber(row.medianHoldingDays, " 天")}
-                </TableCell>
-                <TableCell className="text-right align-top font-mono text-sm tabular-nums">
-                  {formatTurnover(row.weeklyTurnoverPct)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+              return (
+                <TableRow key={row.etfId}>
+                  <TableCell className="sticky left-0 z-10 bg-card align-top">
+                    <div className="font-mono text-sm font-semibold tabular-nums">{row.etfId}</div>
+                    <div className="mt-1 max-w-48 whitespace-normal text-sm font-medium">
+                      {row.name}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{row.tradeDate}</div>
+                  </TableCell>
+                  <TableCell className="align-top text-sm text-muted-foreground">
+                    {row.issuer}
+                  </TableCell>
+                  {returnColumns.map((column) => (
+                    <ReturnCell key={column.field} row={row} column={column} />
+                  ))}
+                  <TableCell className="text-right align-top">
+                    <div
+                      className={cn("font-mono text-sm font-semibold", rateToneClass(timingRate))}
+                    >
+                      {formatWinRate(row.timingWins, row.timingMonths)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right align-top">
+                    <PickingCell
+                      wins={row.pickingRealizedWins}
+                      total={row.pickingRealizedTotal}
+                    />
+                  </TableCell>
+                  <TableCell className="text-right align-top">
+                    <PickingCell wins={row.pickingOpenWins} total={row.pickingOpenTotal} />
+                  </TableCell>
+                  <TableCell className="text-right align-top font-mono text-sm tabular-nums">
+                    {formatNumber(row.medianHoldingDays, " 天")}
+                  </TableCell>
+                  <TableCell className="text-right align-top font-mono text-sm tabular-nums">
+                    {formatTurnover(row.weeklyTurnoverPct)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

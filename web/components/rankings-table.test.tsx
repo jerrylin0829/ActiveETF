@@ -72,6 +72,23 @@ describe("RankingsTable", () => {
     expect(screen.getByText("樣本不足")).toBeInTheDocument();
   });
 
+  it("renders data-gap warnings even when ranking rows exist", () => {
+    render(
+      <RankingsTable
+        rows={rows}
+        warnings={[
+          {
+            title: "近期爬蟲失敗",
+            description: "00982A 2026-07-10：PCF 解析失敗。",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("近期爬蟲失敗");
+    expect(screen.getByText("00982A")).toBeInTheDocument();
+  });
+
   it("sorts by return columns when the header button is clicked", async () => {
     const user = userEvent.setup();
     render(<RankingsTable rows={rows} />);

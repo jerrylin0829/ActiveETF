@@ -1,5 +1,10 @@
 import { createReadOnlySupabaseClient } from "@/lib/supabase";
-import { pickLatestMetrics, type RankingRow } from "@/lib/rankings";
+import {
+  buildDataGapWarnings,
+  pickLatestMetrics,
+  type DataGapWarning,
+  type RankingRow,
+} from "@/lib/rankings";
 
 type MetricRecord = {
   etf_id: string;
@@ -24,9 +29,24 @@ type MetricRecord = {
   etf: { name: string; issuer: string } | { name: string; issuer: string }[] | null;
 };
 
-export type RankingsResult =
-  | { rows: RankingRow[]; error: null }
-  | { rows: RankingRow[]; error: string };
+type EtfRecord = {
+  etf_id: string;
+  name: string;
+  issuer: string;
+};
+
+type ScrapeFailureRecord = {
+  etf_id: string;
+  trade_date: string;
+  run_at: string;
+  error: string | null;
+};
+
+export type RankingsResult = {
+  rows: RankingRow[];
+  warnings: DataGapWarning[];
+  error: string | null;
+};
 
 const metricSelect = `
   etf_id,
@@ -50,6 +70,8 @@ const metricSelect = `
   weekly_turnover_pct,
   etf(name, issuer)
 `;
+
+const pageSize = 1000;
 
 function toNumber(value: number | string | null): number | null {
   if (value === null) {
@@ -96,18 +118,72 @@ export function mapMetricRecord(record: MetricRecord): RankingRow {
   };
 }
 
+async function fetchAllMetricRecords(
+  supabase: ReturnType<typeof createReadOnlySupabaseClient>,
+): Promise<{ data: MetricRecord[]; error: string | null }> {
+  const records: MetricRecord[] = [];
+  let page = 0;
+
+  while (true) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from("etf_metrics")
+      .select(metricSelect)
+      .order("trade_date", { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      return { data: records, error: error.message };
+    }
+
+    const pageRecords = (data ?? []) as MetricRecord[];
+    records.push(...pageRecords);
+
+    if (pageRecords.length < pageSize) {
+      return { data: records, error: null };
+    }
+
+    page += 1;
+  }
+}
+
 export async function fetchRankingRows(): Promise<RankingsResult> {
   const supabase = createReadOnlySupabaseClient();
-  const { data, error } = await supabase
-    .from("etf_metrics")
-    .select(metricSelect)
-    .order("trade_date", { ascending: false })
-    .limit(1000);
+  const [
+    { data: etfData, error: etfError },
+    { data: scrapeFailureData, error: scrapeFailureError },
+    metricsResult,
+  ] = await Promise.all([
+    supabase.from("etf").select("etf_id, name, issuer").order("etf_id", { ascending: true }),
+    supabase
+      .from("scrape_log")
+      .select("etf_id, trade_date, run_at, error")
+      .eq("status", "fail")
+      .order("run_at", { ascending: false })
+      .limit(5),
+    fetchAllMetricRecords(supabase),
+  ]);
 
-  if (error) {
-    return { rows: [], error: error.message };
+  const rows = pickLatestMetrics(metricsResult.data.map(mapMetricRecord));
+  const etfs = ((etfData ?? []) as EtfRecord[]).map((etf) => ({
+    etfId: etf.etf_id,
+    name: etf.name,
+  }));
+  const scrapeFailures = ((scrapeFailureData ?? []) as ScrapeFailureRecord[]).map((failure) => ({
+    etfId: failure.etf_id,
+    tradeDate: failure.trade_date,
+    runAt: failure.run_at,
+    error: failure.error,
+  }));
+  const warnings = buildDataGapWarnings({ etfs, rows, scrapeFailures });
+  const errors = [etfError?.message, scrapeFailureError?.message, metricsResult.error].filter(
+    Boolean,
+  );
+
+  if (errors.length > 0) {
+    return { rows, warnings, error: errors.join("；") };
   }
 
-  const rows = pickLatestMetrics(((data ?? []) as MetricRecord[]).map(mapMetricRecord));
-  return { rows, error: null };
+  return { rows, warnings, error: null };
 }
