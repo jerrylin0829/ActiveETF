@@ -4,6 +4,7 @@ import {
   buildCollectiveMovements,
   buildOverviewDataGapWarnings,
   buildRadarPositions,
+  latestTradingWindow,
   sortChangeEvents,
   type ChangeEvent,
 } from "@/lib/today-overview";
@@ -100,6 +101,53 @@ describe("today overview radar", () => {
       sharedSignal: "2 檔 ETF 近期同步建倉",
       excessReturnLabel: "待上線",
     });
+  });
+
+  it("excludes open NEW positions once they reach 20 trading days", () => {
+    const positions = buildRadarPositions(
+      [{ ...baseEvent, etfId: "A", stockId: "3008", tradeDate: "2026-06-17", changeType: "NEW" }],
+      tradingDates,
+      "2026-07-14",
+    );
+
+    expect(positions).toEqual([]);
+  });
+
+  it("excludes NEW positions that EXIT inside the 20-trading-day window", () => {
+    const positions = buildRadarPositions(
+      [
+        { ...baseEvent, etfId: "A", stockId: "2330", tradeDate: "2026-07-10", changeType: "NEW" },
+        { ...baseEvent, etfId: "A", stockId: "2330", tradeDate: "2026-07-14", changeType: "EXIT" },
+      ],
+      tradingDates,
+      "2026-07-14",
+    );
+
+    expect(positions).toEqual([]);
+  });
+
+  it("builds the 20-day trading window relative to the historical selected date", () => {
+    expect(latestTradingWindow(tradingDates, "2026-07-08", 5)).toEqual([
+      "2026-07-02",
+      "2026-07-03",
+      "2026-07-06",
+      "2026-07-07",
+      "2026-07-08",
+    ]);
+  });
+
+  it("keeps the radar trading window bounded when the database has longer history", () => {
+    const longHistory = Array.from({ length: 120 }, (_, index) => {
+      const date = new Date(Date.UTC(2026, 0, 1 + index));
+      return date.toISOString().slice(0, 10);
+    });
+    const selectedDate = longHistory[79];
+
+    const window = latestTradingWindow(longHistory, selectedDate);
+
+    expect(window).toHaveLength(20);
+    expect(window[0]).toBe(longHistory[60]);
+    expect(window.at(-1)).toBe(selectedDate);
   });
 });
 

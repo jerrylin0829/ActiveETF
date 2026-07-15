@@ -66,6 +66,18 @@ export type ScrapeFailure = {
   error: string | null;
 };
 
+export function latestTradingWindow(
+  tradingDates: string[],
+  selectedDate: string,
+  size = 20,
+): string[] {
+  return tradingDates
+    .filter((date) => date <= selectedDate)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, size)
+    .sort();
+}
+
 const changePriority: Record<ChangeType, number> = {
   NEW: 0,
   EXIT: 1,

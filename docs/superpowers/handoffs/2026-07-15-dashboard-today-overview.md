@@ -21,7 +21,7 @@ Planner：Claude Code ｜ 日期：2026-07-15 ｜ 目標分支前綴：`codex/`
 
 - 新倉雷達的超額報酬計算與 ±10% 標色——需先有 pipeline 片新增衍生表，屬第三片。
 - 「長抱」徽章與畢業動畫（滿 20 日移出雷達本片只需「不顯示」即可）。
-- 任何 pipeline / scraper / DB schema 變更。
+- 任何 pipeline / scraper / DB schema 變更；例外：為避免首頁查詢量隨歷史無上限成長，可新增唯讀 distinct date view/RPC，且不得改變既有資料寫入流程或表格語意。
 - 前端計算任何報酬或指標（鐵則：只 SELECT，聚合限 COUNT/SUM/GROUP BY）。
 - ETF 個別頁、個股反查頁。
 - 深色模式 toggle。

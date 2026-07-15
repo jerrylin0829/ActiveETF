@@ -3,6 +3,7 @@ import {
   buildCollectiveMovements,
   buildOverviewDataGapWarnings,
   buildRadarPositions,
+  latestTradingWindow,
   sortChangeEvents,
   type ChangeEvent,
   type ChangeType,
@@ -54,6 +55,7 @@ const changeSelect = `
   weight_delta_pct,
   etf(name, issuer)
 `;
+const radarWindowSize = 20;
 
 function toNumber(value: number | string): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -97,10 +99,8 @@ async function fetchPaged<T>(
   }
 }
 
-function uniqueDates(records: DateRecord[]): string[] {
-  return Array.from(new Set(records.map((record) => record.trade_date))).sort((a, b) =>
-    b.localeCompare(a),
-  );
+function descendingDates(records: DateRecord[]): string[] {
+  return records.map((record) => record.trade_date).sort((a, b) => b.localeCompare(a));
 }
 
 function normalizeRange(value: string | undefined): OverviewRange {
@@ -192,12 +192,12 @@ export async function fetchTodayOverview({
   const supabase = createReadOnlySupabaseClient();
   const dateResult = await fetchPaged<DateRecord>((from, to) =>
     supabase
-      .from("holding_change")
+      .from("dashboard_holding_change_dates")
       .select("trade_date")
       .order("trade_date", { ascending: false })
       .range(from, to),
   );
-  const availableDates = uniqueDates(dateResult.data);
+  const availableDates = descendingDates(dateResult.data);
   const selectedDate = date && availableDates.includes(date) ? date : (availableDates[0] ?? null);
   const range = normalizeRange(rangeParam);
 
@@ -216,11 +216,26 @@ export async function fetchTodayOverview({
   }
 
   const startDate = rangeStartDate(selectedDate, range);
+  const { data: tradingDateData, error: tradingDatesError } = await supabase
+    .from("dashboard_holding_snapshot_dates")
+    .select("trade_date")
+    .lte("trade_date", selectedDate)
+    .order("trade_date", { ascending: false })
+    .limit(radarWindowSize);
+  const tradingDatesResult = {
+    data: (tradingDateData ?? []) as DateRecord[],
+    error: tradingDatesError?.message ?? null,
+  };
+  const radarTradingDates = latestTradingWindow(
+    descendingDates(tradingDatesResult.data),
+    selectedDate,
+    radarWindowSize,
+  );
+  const radarStartDate = radarTradingDates[0] ?? selectedDate;
   const [
     selectedChangesResult,
     rangeChangesResult,
     radarChangesResult,
-    tradingDatesResult,
     scrapeFailuresResult,
     etfsResult,
   ] = await Promise.all([
@@ -243,14 +258,8 @@ export async function fetchTodayOverview({
       supabase
         .from("holding_change")
         .select(changeSelect)
-        .lte("trade_date", selectedDate)
-        .order("trade_date", { ascending: true })
-        .range(from, to),
-    ),
-    fetchPaged<DateRecord>((from, to) =>
-      supabase
-        .from("holdings_snapshot")
-        .select("trade_date")
+        .in("change_type", ["NEW", "EXIT"])
+        .gte("trade_date", radarStartDate)
         .lte("trade_date", selectedDate)
         .order("trade_date", { ascending: true })
         .range(from, to),
@@ -290,10 +299,10 @@ export async function fetchTodayOverview({
   );
   const errors = [
     dateResult.error,
+    tradingDatesResult.error,
     selectedChangesResult.error,
     rangeChangesResult.error,
     radarChangesResult.error,
-    tradingDatesResult.error,
     scrapeFailuresResult.error?.message,
     etfsResult.error?.message,
     stockNamesResult.error,
@@ -308,7 +317,7 @@ export async function fetchTodayOverview({
     collective: buildCollectiveMovements(rangeEvents),
     radarPositions: buildRadarPositions(
       radarEvents,
-      uniqueDates(tradingDatesResult.data).sort(),
+      radarTradingDates,
       selectedDate,
     ),
     warnings: buildOverviewDataGapWarnings(scrapeFailures),
