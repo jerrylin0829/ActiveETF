@@ -1,0 +1,92 @@
+import { render, screen, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { TodayOverviewDashboard } from "@/components/today-overview-dashboard";
+import type { TodayOverviewViewModel } from "@/lib/today-overview";
+
+const overview: TodayOverviewViewModel = {
+  selectedDate: "2026-07-14",
+  availableDates: ["2026-07-14", "2026-07-13"],
+  range: "day",
+  rangeOptions: [
+    { value: "day", label: "當日", href: "/?date=2026-07-14&range=day", active: true },
+    { value: "week", label: "本週", href: "/?date=2026-07-14&range=week", active: false },
+    { value: "month", label: "本月", href: "/?date=2026-07-14&range=month", active: false },
+  ],
+  changeEvents: [
+    {
+      etfId: "00980A",
+      etfName: "主動野村臺灣優選",
+      issuer: "野村",
+      tradeDate: "2026-07-14",
+      stockId: "2330",
+      stockName: "台積電",
+      changeType: "NEW",
+      sharesDelta: 12000,
+      weightDeltaPct: 0.52,
+    },
+  ],
+  collective: {
+    increases: [
+      {
+        stockId: "2330",
+        stockName: "台積電",
+        etfCount: 2,
+        totalWeightDeltaPct: 0.74,
+      },
+    ],
+    decreases: [
+      {
+        stockId: "2303",
+        stockName: "聯電",
+        etfCount: 1,
+        totalWeightDeltaPct: -0.31,
+      },
+    ],
+  },
+  radarPositions: [
+    {
+      etfId: "00980A",
+      etfName: "主動野村臺灣優選",
+      issuer: "野村",
+      stockId: "2330",
+      stockName: "台積電",
+      entryDate: "2026-07-14",
+      holdingTradingDays: 1,
+      sharedEtfCount: 2,
+      sharedSignal: "2 檔 ETF 近期同步建倉",
+      excessReturnLabel: "待上線",
+    },
+  ],
+  warnings: [
+    {
+      title: "資料缺口",
+      description: "2026-07-14 有 1 檔 ETF 爬蟲失敗：00987A 台新優勢成長（ValidationError: empty holdings）。",
+    },
+  ],
+  error: null,
+};
+
+describe("TodayOverviewDashboard", () => {
+  it("renders the overview sections, data gap warning, and radar placeholder", () => {
+    const { container } = render(<TodayOverviewDashboard overview={overview} />);
+
+    expect(screen.getByRole("heading", { name: "今日總覽" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ETF 排行榜" })).toHaveAttribute("href", "/rankings");
+    expect(screen.getByRole("alert")).toHaveTextContent("00987A 台新優勢成長");
+
+    expect(screen.getByRole("heading", { name: "異動牆" })).toBeInTheDocument();
+    expect(screen.getByText("NEW")).toBeInTheDocument();
+    expect(screen.getByText("+12,000")).toBeInTheDocument();
+
+    const collective = screen.getByRole("region", { name: "集體動向" });
+    expect(within(collective).getByText("台積電")).toBeInTheDocument();
+    expect(within(collective).getByText("2 檔 ETF")).toBeInTheDocument();
+
+    const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
+    expect(within(radar).getByText("待上線")).toBeInTheDocument();
+    expect(within(radar).getByText("2 檔 ETF 近期同步建倉")).toBeInTheDocument();
+    expect(radar).toHaveClass("min-w-0");
+    expect(container.querySelector("main > div")).toHaveClass("grid-cols-[minmax(0,1fr)]");
+  });
+});

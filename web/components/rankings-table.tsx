@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { DataGapAlerts } from "@/components/data-gap-alerts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -140,27 +141,6 @@ function PickingCell({
           樣本不足
         </Badge>
       ) : null}
-    </div>
-  );
-}
-
-function DataGapAlerts({ warnings }: { warnings: DataGapWarning[] }) {
-  if (warnings.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-3">
-      {warnings.map((warning) => (
-        <Alert
-          key={`${warning.title}-${warning.description}`}
-          role="alert"
-          className="border-amber-300 bg-amber-50 text-amber-950"
-        >
-          <AlertTitle>{warning.title}</AlertTitle>
-          <AlertDescription>{warning.description}</AlertDescription>
-        </Alert>
-      ))}
     </div>
   );
 }
