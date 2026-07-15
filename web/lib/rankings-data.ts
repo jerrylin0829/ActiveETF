@@ -1,9 +1,11 @@
 import { createReadOnlySupabaseClient } from "@/lib/supabase";
 import {
   buildDataGapWarnings,
+  latestUnresolvedScrapeFailures,
   pickLatestMetrics,
   type DataGapWarning,
   type RankingRow,
+  type ScrapeLogEntry,
 } from "@/lib/rankings";
 
 type MetricRecord = {
@@ -35,10 +37,11 @@ type EtfRecord = {
   issuer: string;
 };
 
-type ScrapeFailureRecord = {
+type ScrapeLogRecord = {
   etf_id: string;
   trade_date: string;
   run_at: string;
+  status: "ok" | "fail";
   error: string | null;
 };
 
@@ -72,6 +75,7 @@ const metricSelect = `
 `;
 
 const pageSize = 1000;
+const scrapeLogLookbackLimit = 250;
 
 function toNumber(value: number | string | null): number | null {
   if (value === null) {
@@ -152,16 +156,15 @@ export async function fetchRankingRows(): Promise<RankingsResult> {
   const supabase = createReadOnlySupabaseClient();
   const [
     { data: etfData, error: etfError },
-    { data: scrapeFailureData, error: scrapeFailureError },
+    { data: scrapeLogData, error: scrapeLogError },
     metricsResult,
   ] = await Promise.all([
     supabase.from("etf").select("etf_id, name, issuer").order("etf_id", { ascending: true }),
     supabase
       .from("scrape_log")
-      .select("etf_id, trade_date, run_at, error")
-      .eq("status", "fail")
+      .select("etf_id, trade_date, run_at, status, error")
       .order("run_at", { ascending: false })
-      .limit(5),
+      .limit(scrapeLogLookbackLimit),
     fetchAllMetricRecords(supabase),
   ]);
 
@@ -170,16 +173,16 @@ export async function fetchRankingRows(): Promise<RankingsResult> {
     etfId: etf.etf_id,
     name: etf.name,
   }));
-  const scrapeFailures = ((scrapeFailureData ?? []) as ScrapeFailureRecord[]).map((failure) => ({
-    etfId: failure.etf_id,
-    tradeDate: failure.trade_date,
-    runAt: failure.run_at,
-    error: failure.error,
+  const scrapeLogs = ((scrapeLogData ?? []) as ScrapeLogRecord[]).map((log) => ({
+    etfId: log.etf_id,
+    tradeDate: log.trade_date,
+    runAt: log.run_at,
+    status: log.status,
+    error: log.error,
   }));
+  const scrapeFailures = latestUnresolvedScrapeFailures(scrapeLogs as ScrapeLogEntry[]);
   const warnings = buildDataGapWarnings({ etfs, rows, scrapeFailures });
-  const errors = [etfError?.message, scrapeFailureError?.message, metricsResult.error].filter(
-    Boolean,
-  );
+  const errors = [etfError?.message, scrapeLogError?.message, metricsResult.error].filter(Boolean);
 
   if (errors.length > 0) {
     return { rows, warnings, error: errors.join("；") };

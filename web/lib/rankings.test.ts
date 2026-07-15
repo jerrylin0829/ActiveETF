@@ -8,6 +8,7 @@ import {
   formatWinRate,
   getLatestTradeDate,
   getReturnTone,
+  latestUnresolvedScrapeFailures,
   pickLatestMetrics,
   sortRankings,
   type DataGapInput,
@@ -161,5 +162,54 @@ describe("data gap warnings", () => {
         scrapeFailures: [],
       }),
     ).toEqual([]);
+  });
+
+  it("ignores scrape failures resolved by a later ok log for the same ETF/date", () => {
+    expect(
+      latestUnresolvedScrapeFailures([
+        {
+          etfId: "00987A",
+          tradeDate: "2026-07-14",
+          runAt: "2026-07-14T11:56:07Z",
+          status: "fail",
+          error: "ValidationError: empty holdings",
+        },
+        {
+          etfId: "00987A",
+          tradeDate: "2026-07-14",
+          runAt: "2026-07-14T15:08:39Z",
+          status: "ok",
+          error: null,
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("keeps scrape failures when the latest log for that ETF/date is still fail", () => {
+    expect(
+      latestUnresolvedScrapeFailures([
+        {
+          etfId: "00987A",
+          tradeDate: "2026-07-14",
+          runAt: "2026-07-14T15:08:39Z",
+          status: "ok",
+          error: null,
+        },
+        {
+          etfId: "00987A",
+          tradeDate: "2026-07-15",
+          runAt: "2026-07-15T11:56:07Z",
+          status: "fail",
+          error: "ValidationError: empty holdings",
+        },
+      ]),
+    ).toEqual([
+      {
+        etfId: "00987A",
+        tradeDate: "2026-07-15",
+        runAt: "2026-07-15T11:56:07Z",
+        error: "ValidationError: empty holdings",
+      },
+    ]);
   });
 });
