@@ -35,9 +35,12 @@ type EtfRecord = {
   name: string;
 };
 
-type ScrapeFailureRecord = {
+type ScrapeAttemptRecord = {
+  id: number | string;
   etf_id: string;
   trade_date: string;
+  run_at: string;
+  status: "ok" | "fail";
   error: string | null;
 };
 
@@ -101,6 +104,25 @@ async function fetchPaged<T>(
 
 function descendingDates(records: DateRecord[]): string[] {
   return records.map((record) => record.trade_date).sort((a, b) => b.localeCompare(a));
+}
+
+function latestFailedScrapeAttempts(records: ScrapeAttemptRecord[]): ScrapeAttemptRecord[] {
+  const latestByEtfAndDate = new Map<string, ScrapeAttemptRecord>();
+
+  for (const record of records) {
+    const key = `${record.etf_id}:${record.trade_date}`;
+    const current = latestByEtfAndDate.get(key);
+    const newerRun = !current || record.run_at > current.run_at;
+    const sameRunWithNewerId = current
+      && record.run_at === current.run_at
+      && BigInt(record.id) > BigInt(current.id);
+
+    if (newerRun || sameRunWithNewerId) {
+      latestByEtfAndDate.set(key, record);
+    }
+  }
+
+  return Array.from(latestByEtfAndDate.values()).filter((record) => record.status === "fail");
 }
 
 function normalizeRange(value: string | undefined): OverviewRange {
@@ -244,6 +266,9 @@ export async function fetchTodayOverview({
         .from("holding_change")
         .select(changeSelect)
         .eq("trade_date", selectedDate)
+        .order("trade_date", { ascending: true })
+        .order("etf_id", { ascending: true })
+        .order("stock_id", { ascending: true })
         .range(from, to),
     ),
     fetchPaged<HoldingChangeRecord>((from, to) =>
@@ -252,6 +277,9 @@ export async function fetchTodayOverview({
         .select(changeSelect)
         .gte("trade_date", startDate)
         .lte("trade_date", selectedDate)
+        .order("trade_date", { ascending: true })
+        .order("etf_id", { ascending: true })
+        .order("stock_id", { ascending: true })
         .range(from, to),
     ),
     fetchPaged<HoldingChangeRecord>((from, to) =>
@@ -262,13 +290,19 @@ export async function fetchTodayOverview({
         .gte("trade_date", radarStartDate)
         .lte("trade_date", selectedDate)
         .order("trade_date", { ascending: true })
+        .order("etf_id", { ascending: true })
+        .order("stock_id", { ascending: true })
         .range(from, to),
     ),
-    supabase
-      .from("scrape_log")
-      .select("etf_id, trade_date, error")
-      .eq("trade_date", selectedDate)
-      .eq("status", "fail"),
+    fetchPaged<ScrapeAttemptRecord>((from, to) =>
+      supabase
+        .from("scrape_log")
+        .select("id, etf_id, trade_date, run_at, status, error")
+        .eq("trade_date", selectedDate)
+        .order("run_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    ),
     supabase.from("etf").select("etf_id, name"),
   ]);
 
@@ -289,7 +323,7 @@ export async function fetchTodayOverview({
   const etfNames = new Map(
     (((etfsResult.data ?? []) as EtfRecord[]).map((record) => [record.etf_id, record.name])),
   );
-  const scrapeFailures = ((scrapeFailuresResult.data ?? []) as ScrapeFailureRecord[]).map(
+  const scrapeFailures = latestFailedScrapeAttempts(scrapeFailuresResult.data).map(
     (failure): ScrapeFailure => ({
       etfId: failure.etf_id,
       etfName: etfNames.get(failure.etf_id) ?? failure.etf_id,
@@ -303,7 +337,7 @@ export async function fetchTodayOverview({
     selectedChangesResult.error,
     rangeChangesResult.error,
     radarChangesResult.error,
-    scrapeFailuresResult.error?.message,
+    scrapeFailuresResult.error,
     etfsResult.error?.message,
     stockNamesResult.error,
   ].filter(Boolean);

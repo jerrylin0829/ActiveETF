@@ -181,7 +181,7 @@ function CollectiveMovements({ overview }: { overview: TodayOverviewViewModel })
 
 function NewPositionRadar({ overview }: { overview: TodayOverviewViewModel }) {
   return (
-    <section aria-label="新倉追蹤雷達" className="space-y-3">
+    <section aria-label="新倉追蹤雷達" className="min-w-0 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">新倉追蹤雷達</h2>
@@ -281,7 +281,7 @@ export function TodayOverviewDashboard({ overview }: { overview: TodayOverviewVi
         </div>
       </section>
 
-      <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-[minmax(0,1fr)] gap-8 px-4 py-6 sm:px-6 lg:px-8">
         <ChangeWall events={overview.changeEvents} />
         <CollectiveMovements overview={overview} />
         <NewPositionRadar overview={overview} />

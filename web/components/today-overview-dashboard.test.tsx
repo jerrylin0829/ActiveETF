@@ -69,7 +69,7 @@ const overview: TodayOverviewViewModel = {
 
 describe("TodayOverviewDashboard", () => {
   it("renders the overview sections, data gap warning, and radar placeholder", () => {
-    render(<TodayOverviewDashboard overview={overview} />);
+    const { container } = render(<TodayOverviewDashboard overview={overview} />);
 
     expect(screen.getByRole("heading", { name: "今日總覽" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ETF 排行榜" })).toHaveAttribute("href", "/rankings");
@@ -86,5 +86,7 @@ describe("TodayOverviewDashboard", () => {
     const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
     expect(within(radar).getByText("待上線")).toBeInTheDocument();
     expect(within(radar).getByText("2 檔 ETF 近期同步建倉")).toBeInTheDocument();
+    expect(radar).toHaveClass("min-w-0");
+    expect(container.querySelector("main > div")).toHaveClass("grid-cols-[minmax(0,1fr)]");
   });
 });
