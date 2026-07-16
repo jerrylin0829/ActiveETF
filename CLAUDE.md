@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 專案概述
 
-追蹤台股全部主動式**股票型** ETF（代號結尾 `A`，約 27 檔）的每日持股異動 Dashboard：增減持/新進/出清事件、當前持股比例、績效與勝率指標。公開網站，營運成本 $0/月。
+追蹤台股**全部已掛牌主動式股票型 ETF**（代號結尾 `A`；檔數以 `etf` 表為準，會隨新 ETF 掛牌增加，不寫死）的每日持股異動 Dashboard：增減持/新進/出清事件、當前持股比例、績效與勝率指標。公開網站，營運成本 $0/月。
 
 **唯一的設計事實來源**：`docs/superpowers/specs/2026-07-04-active-etf-tracker-design.md`。任何實作決策與該 spec 衝突時，先讀 spec；要改規則就先改 spec（並 commit），不要讓程式碼默默偏離文件。
 
@@ -54,7 +54,12 @@ GitHub Actions（每日 18:30 主場 + 21:30 補抓）
 
 ## 目前狀態與指令
 
-資料 pipeline（爬蟲 + Supabase + 每日排程）已完成並上線，見 `docs/superpowers/plans/2026-07-04-data-pipeline.md`（Task 1–16 全數完成）。前端 Dashboard（`web/`，spec §7）尚未開工，屬下一個計畫。
+資料 pipeline（爬蟲 + Supabase + 每日排程）已完成並上線，見 `docs/superpowers/plans/2026-07-04-data-pipeline.md`（Task 1–16 全數完成）。
+
+前端 Dashboard（`web/`，spec §7）已部分上線，正式站 https://active-etf-dashboard.vercel.app （Vercel Git 自動部署，push main 即部署）：
+- 已完成：今日總覽（首頁，含異動牆、日/週/月集體動向）、ETF 排行榜
+- 進行中：交集表與產業權重輪動（spec/plan 見 `docs/superpowers/specs/2026-07-16-cross-holdings-rotation-design.md`）
+- 待辦（依序）：新倉追蹤雷達超額報酬（目前顯示「待上線」，等 Planner handoff）→ ETF 個別頁 → 個股反查頁
 
 爬蟲指令（在 `scraper/` 下）：
 - 測試：`uv run pytest`（需 DB 的整合測試在無 `SUPABASE_DB_URL` 時自動 skip；本機要跑真整合測試先 `set -a && source .env.local && set +a`）
