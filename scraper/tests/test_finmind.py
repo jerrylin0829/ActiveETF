@@ -69,3 +69,21 @@ def test_adj_prices_falls_back_to_two_suffix_when_tw_empty(monkeypatch):
 def test_adj_prices_returns_empty_when_no_suffix_has_data(monkeypatch):
     monkeypatch.setattr(finmind.yf, "Ticker", lambda s: _FakeTicker(s, {}))
     assert finmind.adj_prices("0000", "2026-07-01", "2026-07-01") == []
+
+
+def test_adj_prices_drops_nan_rows_and_degrades_raw_close(monkeypatch):
+    # yfinance pads the latest bar with NaN sometimes; NaN must never reach
+    # the DB (numeric 'NaN' is not null, so coalesce-based upserts keep it
+    # and it poisons every downstream sum/return).
+    idx = pd.to_datetime(["2026-07-01", "2026-07-02", "2026-07-03"])
+    hist = pd.DataFrame({"Close": [610.0, float("nan"), float("nan")],
+                         "Adj Close": [605.0, 611.0, float("nan")]}, index=idx)
+    monkeypatch.setattr(finmind.yf, "Ticker",
+                        lambda s: _FakeTicker(s, {"2330.TW": hist}))
+    rows = finmind.adj_prices("2330", "2026-07-01", "2026-07-03")
+    assert rows == [
+        {"stock_id": "2330", "date": "2026-07-01", "close": 605.0, "raw_close": 610.0},
+        # raw close NaN -> None, adjusted still usable
+        {"stock_id": "2330", "date": "2026-07-02", "close": 611.0, "raw_close": None},
+        # adjusted close NaN -> whole row dropped
+    ]

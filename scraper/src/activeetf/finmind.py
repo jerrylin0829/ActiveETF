@@ -6,6 +6,7 @@
 backer/sponsor 會員；全市場 TaiwanStockPrice（不帶 data_id）亦回 400。皆為
 $0/月營運目標下的限制（spec §2 2026-07-09 決策）。"""
 import datetime as dt
+import math
 import os
 import requests
 import yfinance as yf
@@ -32,10 +33,15 @@ def adj_prices(stock_id: str, start: str, end: str) -> list[dict]:
         hist = yf.Ticker(f"{stock_id}{suffix}").history(
             start=start, end=end_inclusive, auto_adjust=False)
         if not hist.empty:
-            return [{"stock_id": stock_id, "date": idx.strftime("%Y-%m-%d"),
-                     "close": float(row["Adj Close"]),
-                     "raw_close": float(row["Close"])}
-                    for idx, row in hist.iterrows()]
+            rows = []
+            for idx, row in hist.iterrows():
+                adj, raw = float(row["Adj Close"]), float(row["Close"])
+                if math.isnan(adj):   # yfinance pads NaN bars; never emit NaN
+                    continue
+                rows.append({"stock_id": stock_id, "date": idx.strftime("%Y-%m-%d"),
+                             "close": adj,
+                             "raw_close": None if math.isnan(raw) else raw})
+            return rows
     return []
 
 def total_return_index(start: str, end: str) -> list[dict]:
