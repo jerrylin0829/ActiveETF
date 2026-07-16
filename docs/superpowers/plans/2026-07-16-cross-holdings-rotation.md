@@ -792,12 +792,12 @@ Expected: FAIL — cannot resolve `@/components/cross-holdings-table`
 
 - [ ] **Step 3: 實作元件**
 
-`web/components/cross-holdings-table.tsx`（client component；表格用 `components/ui/table.tsx`、徽章用 `components/ui/badge.tsx`；紅漲綠跌沿用既有 class 慣例——實作前先看 `rankings-table.tsx` 用哪組紅綠 class 並沿用）：
+`web/components/cross-holdings-table.tsx`（client component；表格用 `components/ui/table.tsx`、徽章用 `components/ui/badge.tsx`；紅漲綠跌沿用 `today-overview-dashboard.tsx` 的既有慣例：`--market-up`/`--market-down` CSS 變數與 red/emerald badge 配色）：
 
 ```typescript
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -821,6 +821,10 @@ const coverageOptions: { value: CoverageFilter; label: string }[] = [
 const changeLabel: Record<string, string> = {
   NEW: "新進", ADD: "加碼", TRIM: "減碼", EXIT: "出清",
 };
+
+// mirrors badgeTone() in today-overview-dashboard.tsx: 紅漲綠跌
+const UP_BADGE = "border-red-200 bg-red-50 text-red-700";
+const DOWN_BADGE = "border-emerald-200 bg-emerald-50 text-emerald-700";
 
 export function CrossHoldingsTable({ rows, details }: Props) {
   const [sort, setSort] = useState<SortState>({ key: "etfCount", desc: true });
@@ -891,8 +895,8 @@ export function CrossHoldingsTable({ rows, details }: Props) {
         </TableHeader>
         <TableBody>
           {visible.map((r) => (
-            <>
-              <TableRow key={r.stockId} data-testid="cross-row" className="cursor-pointer"
+            <Fragment key={r.stockId}>
+              <TableRow data-testid="cross-row" className="cursor-pointer"
                 onClick={() => setExpanded(expanded === r.stockId ? null : r.stockId)}>
                 <TableCell className="font-mono">{r.stockId} {r.stockName}</TableCell>
                 <TableCell className="hidden md:table-cell">{r.industry}</TableCell>
@@ -905,10 +909,10 @@ export function CrossHoldingsTable({ rows, details }: Props) {
                   {formatLots(r.totalShares)}
                 </TableCell>
                 <TableCell className="space-x-1">
-                  {r.newCount > 0 && <Badge className="up-badge">新進×{r.newCount}</Badge>}
-                  {r.addCount > 0 && <Badge className="up-badge">加碼×{r.addCount}</Badge>}
-                  {r.trimCount > 0 && <Badge className="down-badge">減碼×{r.trimCount}</Badge>}
-                  {r.exitCount > 0 && <Badge className="down-badge">出清×{r.exitCount}</Badge>}
+                  {r.newCount > 0 && <Badge className={UP_BADGE}>新進×{r.newCount}</Badge>}
+                  {r.addCount > 0 && <Badge className={UP_BADGE}>加碼×{r.addCount}</Badge>}
+                  {r.trimCount > 0 && <Badge className={DOWN_BADGE}>減碼×{r.trimCount}</Badge>}
+                  {r.exitCount > 0 && <Badge className={DOWN_BADGE}>出清×{r.exitCount}</Badge>}
                 </TableCell>
               </TableRow>
               {expanded === r.stockId && (details[r.stockId] ?? []).map((d) => (
@@ -925,7 +929,7 @@ export function CrossHoldingsTable({ rows, details }: Props) {
                   <TableCell>{d.changeType ? changeLabel[d.changeType] : ""}</TableCell>
                 </TableRow>
               ))}
-            </>
+            </Fragment>
           ))}
         </TableBody>
       </Table>
@@ -933,8 +937,6 @@ export function CrossHoldingsTable({ rows, details }: Props) {
   );
 }
 ```
-
-（`up-badge` / `down-badge` 為佔位——實作時以 `rankings-table.tsx` 現有的紅漲綠跌 class 取代，維持全站一致。）
 
 - [ ] **Step 4: 跑元件測試確認通過**
 
@@ -1397,10 +1399,10 @@ export function RotationDashboard({ rows, etfCountTotal }: Props) {
     setSelected((s) =>
       s.includes(industry) ? s.filter((i) => i !== industry) : [...s, industry]);
 
+  // 紅漲綠跌: same CSS vars as changeTone() in today-overview-dashboard.tsx
   const changeCell = (v: number | null) => (
     <TableCell className={`tabular-nums ${
-      v === null ? "" : v >= 0 ? "text-red-600 dark:text-red-400"
-                              : "text-green-600 dark:text-green-400"}`}>
+      v === null ? "" : v >= 0 ? "text-[var(--market-up)]" : "text-[var(--market-down)]"}`}>
       {formatSignedPct(v)}
     </TableCell>
   );
@@ -1459,8 +1461,6 @@ export function RotationDashboard({ rows, etfCountTotal }: Props) {
   );
 }
 ```
-
-（紅綠 class 同樣以 `rankings-table.tsx` 實際用的那組為準，實作時對齊。）
 
 - [ ] **Step 4: 跑元件測試確認通過**
 
@@ -1568,5 +1568,5 @@ npm run dev
 ## Self-Review 紀錄
 
 - **Spec 覆蓋**：§3 兩表與 pipeline/backfill = Task 1–4；§4 產業分類（未分類 fallback）= Task 2 SQL 與測試；§5 交集表（欄位/篩選/展開/排序/手機/空狀態/黃條）= Task 6–8；§6 輪動（圖/表/範圍/點選/黃條）= Task 9–11；§7 數字格式 = Task 5（測試明確驗 `+12.33%`）；§8 Recharts = Task 5；§9 測試 = 各 Task TDD + Task 12。§10 未來擴充不在本計畫（正確）。
-- **無 placeholder**：唯二標註「實作時對齊」者為紅綠 class 名（依 `rankings-table.tsx` 現值），屬既有程式碼查閱而非未定設計。
+- **無 placeholder**：紅綠樣式已直接沿用 `today-overview-dashboard.tsx` 的既有慣例（`--market-up`/`--market-down` CSS 變數、red/emerald badge 配色），無待查項目。
 - **型別一致**：`CrossRow`/`CrossDetail`/`SortState`/`CoverageFilter` 定義於 Task 6、Task 7/8 引用相同名稱；`IndustryDaily`/`RotationSeries` 定義於 Task 9、Task 10/11 引用相同名稱；`formatPct`/`formatSignedPct`/`formatYi`/`formatLots` 定義於 Task 5、Task 8/11 引用。
