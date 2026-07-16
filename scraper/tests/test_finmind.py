@@ -37,29 +37,33 @@ class _FakeTicker:
         self._hist_by_symbol = hist_by_symbol
 
     def history(self, start, end, auto_adjust):
-        assert auto_adjust is True
+        assert auto_adjust is False   # need both raw Close and Adj Close
         return self._hist_by_symbol.get(self.symbol, pd.DataFrame())
 
 
 def test_adj_prices_uses_yfinance_tw_suffix(monkeypatch):
     idx = pd.to_datetime(["2026-07-01", "2026-07-02"])
-    hist = pd.DataFrame({"Close": [610.0, 615.5]}, index=idx)
+    # auto_adjust=False gives raw Close and Adj Close; "close" stays the
+    # adjusted series so every downstream consumer keeps its semantics.
+    hist = pd.DataFrame({"Close": [610.0, 615.5],
+                         "Adj Close": [605.0, 610.5]}, index=idx)
     monkeypatch.setattr(finmind.yf, "Ticker",
                         lambda s: _FakeTicker(s, {"2330.TW": hist}))
     rows = finmind.adj_prices("2330", "2026-07-01", "2026-07-02")
     assert rows == [
-        {"stock_id": "2330", "date": "2026-07-01", "close": 610.0},
-        {"stock_id": "2330", "date": "2026-07-02", "close": 615.5},
+        {"stock_id": "2330", "date": "2026-07-01", "close": 605.0, "raw_close": 610.0},
+        {"stock_id": "2330", "date": "2026-07-02", "close": 610.5, "raw_close": 615.5},
     ]
 
 
 def test_adj_prices_falls_back_to_two_suffix_when_tw_empty(monkeypatch):
     idx = pd.to_datetime(["2026-07-01"])
-    hist = pd.DataFrame({"Close": [88.8]}, index=idx)
+    hist = pd.DataFrame({"Close": [90.0], "Adj Close": [88.8]}, index=idx)
     monkeypatch.setattr(finmind.yf, "Ticker",
                         lambda s: _FakeTicker(s, {"6488.TWO": hist}))
     rows = finmind.adj_prices("6488", "2026-07-01", "2026-07-01")
-    assert rows == [{"stock_id": "6488", "date": "2026-07-01", "close": 88.8}]
+    assert rows == [{"stock_id": "6488", "date": "2026-07-01",
+                     "close": 88.8, "raw_close": 90.0}]
 
 
 def test_adj_prices_returns_empty_when_no_suffix_has_data(monkeypatch):

@@ -24,15 +24,18 @@ def _get(params: dict) -> list[dict]:
 
 def adj_prices(stock_id: str, start: str, end: str) -> list[dict]:
     """單一標的還原價序列（報酬/勝率計算用）。依序試 .TW（上市）/.TWO（上櫃），
-    兩者皆無資料則回傳空 list（比照海外持股：該檔個股層級指標從缺）。"""
+    兩者皆無資料則回傳空 list（比照海外持股：該檔個股層級指標從缺）。
+    "close" 一律是還原價（下游語意不變）；"raw_close" 是未還原收盤價，
+    供市值類計算（交集表合計金額）使用。"""
     end_inclusive = (dt.date.fromisoformat(end) + dt.timedelta(days=1)).isoformat()
     for suffix in (".TW", ".TWO"):
         hist = yf.Ticker(f"{stock_id}{suffix}").history(
-            start=start, end=end_inclusive, auto_adjust=True)
+            start=start, end=end_inclusive, auto_adjust=False)
         if not hist.empty:
             return [{"stock_id": stock_id, "date": idx.strftime("%Y-%m-%d"),
-                     "close": float(close)}
-                    for idx, close in hist["Close"].items()]
+                     "close": float(row["Adj Close"]),
+                     "raw_close": float(row["Close"])}
+                    for idx, row in hist.iterrows()]
     return []
 
 def total_return_index(start: str, end: str) -> list[dict]:
