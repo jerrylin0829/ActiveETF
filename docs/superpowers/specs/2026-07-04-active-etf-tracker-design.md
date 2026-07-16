@@ -122,6 +122,8 @@ scraper/
 
 **④ 個股反查頁**：誰持有/誰加誰減、全體主動式 ETF 對該股合計權重走勢、事件歷史。
 
+**⑤ 交集表 / ⑥ 產業權重輪動**：橫向聚合視角（每股被幾檔 ETF 持有、全體產業資金流向），含兩張每日衍生表 `cross_holdings_daily`、`industry_weight_daily`。完整設計見 `2026-07-16-cross-holdings-rotation-design.md`。
+
 **全站**：資料缺口黃色警示條、手機響應式、深色模式。
 
 ## 8. 部署與排程
