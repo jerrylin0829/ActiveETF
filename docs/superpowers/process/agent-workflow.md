@@ -18,6 +18,7 @@ ActiveETF 使用輕量 agent harness：User 負責調度與裁決，Claude Code 
 - Planner 只定義 scope、風險、驗收條件與交接 prompt，除非 User 明確要求，不直接改 code。
 - Generator 負責修改 repo，但不得跳過測試或把未驗證事項寫成已完成。
 - Evaluator 預設只 review，不直接修 code，避免角色混淆。
+- Operator（資料守門人）負責 merge 後的現實對帳——每日運行健康與定期真值比對；只觀測與回報，不改 code，發現問題轉成 Planner 的新任務。角色定義見 spec。
 - User 是唯一可裁決 spec 變更、merge、scope tradeoff 的角色。
 
 ## 分支與 PR
