@@ -14,15 +14,21 @@ export type DataGapWarning = {
   description: string;
 };
 
+export type ScrapeFailure = {
+  etfId: string;
+  tradeDate: string;
+  runAt: string;
+  error: string | null;
+};
+
+export type ScrapeLogEntry = ScrapeFailure & {
+  status: "ok" | "fail";
+};
+
 export type DataGapInput = {
   etfs: Array<{ etfId: string; name: string }>;
   rows: RankingRow[];
-  scrapeFailures: Array<{
-    etfId: string;
-    tradeDate: string;
-    runAt: string;
-    error: string | null;
-  }>;
+  scrapeFailures: ScrapeFailure[];
 };
 
 export type RankingRow = {
@@ -143,6 +149,25 @@ function formatEtfList(items: string[]): string {
   const visible = items.slice(0, 5);
   const suffix = items.length > visible.length ? ` 等 ${items.length} 檔` : "";
   return `${visible.join("、")}${suffix}`;
+}
+
+export function latestUnresolvedScrapeFailures(logs: ScrapeLogEntry[]): ScrapeFailure[] {
+  const latestByKey = new Map<string, ScrapeLogEntry>();
+  const sortedLogs = [...logs].sort((a, b) => {
+    const diff = Date.parse(b.runAt) - Date.parse(a.runAt);
+    return Number.isNaN(diff) || diff === 0 ? b.runAt.localeCompare(a.runAt) : diff;
+  });
+
+  for (const log of sortedLogs) {
+    const key = `${log.etfId}:${log.tradeDate}`;
+    if (!latestByKey.has(key)) {
+      latestByKey.set(key, log);
+    }
+  }
+
+  return Array.from(latestByKey.values())
+    .filter((log) => log.status === "fail")
+    .map(({ etfId, tradeDate, runAt, error }) => ({ etfId, tradeDate, runAt, error }));
 }
 
 export function buildDataGapWarnings({
