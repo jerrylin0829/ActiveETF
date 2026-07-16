@@ -58,6 +58,7 @@ def main() -> int:
         scrape_one(entry, today, deps)
         time.sleep(1.5)
     metrics.compute_all(today)   # 還原價/指數由 metrics 按需向 yfinance/FinMind 拉並快取
+    db.refresh_daily_aggregates(today)   # spec 2026-07-16 §3.3: aggregates after snapshots+events
     # 只把「已實作的 adapter」納入成敗判定：未實作者本就會 log fail，不該稀釋全滅判斷。
     # 注意：部分失敗目前只落在 scrape_log，Dashboard 黃條尚未實作，故僅全滅時讓 job 紅。
     implemented = [e for e in entries() if e.adapter and e.pcf_url]
