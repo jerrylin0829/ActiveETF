@@ -41,7 +41,8 @@ def adj_prices(stock_id: str, start: str, end: str) -> list[dict]:
                 rows.append({"stock_id": stock_id, "date": idx.strftime("%Y-%m-%d"),
                              "close": adj,
                              "raw_close": None if math.isnan(raw) else raw})
-            return rows
+            if rows:
+                return rows
     return []
 
 def total_return_index(start: str, end: str) -> list[dict]:
