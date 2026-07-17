@@ -25,6 +25,7 @@ import { formatPct, formatSignedPct } from "@/lib/format";
 import {
   buildRotationSeries,
   buildRotationTable,
+  filterRotationChartRange,
   topIndustries,
   type IndustryDaily,
   type RotationRange,
@@ -54,6 +55,7 @@ const COLORS = [
 
 export function RotationDashboard({ rows, range = "3M" }: RotationDashboardProps) {
   const series = useMemo(() => buildRotationSeries(rows), [rows]);
+  const chartSeries = useMemo(() => filterRotationChartRange(series, range), [series, range]);
   const [selected, setSelected] = useState<string[]>(() => topIndustries(series, 6));
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(0);
@@ -80,11 +82,13 @@ export function RotationDashboard({ rows, range = "3M" }: RotationDashboardProps
   );
   const chartData = useMemo(
     () =>
-      series.dates.map((date, i) => ({
+      chartSeries.dates.map((date, i) => ({
         date,
-        ...Object.fromEntries(selected.map((ind) => [ind, series.byIndustry[ind]?.[i] ?? null])),
+        ...Object.fromEntries(
+          selected.map((ind) => [ind, chartSeries.byIndustry[ind]?.[i] ?? null]),
+        ),
       })),
-    [series, selected],
+    [chartSeries, selected],
   );
 
   if (rows.length === 0) {
@@ -147,13 +151,13 @@ export function RotationDashboard({ rows, range = "3M" }: RotationDashboardProps
                 isAnimationActive={false}
               />
             ))}
-            {series.dates.length === 1 &&
+            {chartSeries.dates.length === 1 &&
               selected.map((industry, index) => {
-                const value = series.byIndustry[industry]?.[0];
+                const value = chartSeries.byIndustry[industry]?.[0];
                 return value === null || value === undefined ? null : (
                   <ReferenceDot
                     key={`single-${industry}`}
-                    x={series.dates[0]}
+                    x={chartSeries.dates[0]}
                     y={value}
                     r={4}
                     fill={COLORS[index % COLORS.length]}

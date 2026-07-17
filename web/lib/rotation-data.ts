@@ -26,17 +26,18 @@ const pageSize = 1000;
 export async function fetchRotationData(rangeParam?: string): Promise<RotationDataResult> {
   const supabase = createReadOnlySupabaseClient();
   const range = normalizeRotationRange(rangeParam);
-  const [latestResult, etfResult] = await Promise.all([
+  const [dateResult, etfResult] = await Promise.all([
     supabase
-      .from("industry_weight_daily")
+      .from("dashboard_cross_dates")
       .select("trade_date")
       .order("trade_date", { ascending: false })
-      .limit(1),
+      .limit(21),
     supabase.from("etf").select("etf_id"),
   ]);
-  const latestDate = latestResult.data?.[0]?.trade_date as string | undefined;
+  const aggregateDates = (dateResult.data ?? []).map((row) => row.trade_date as string);
+  const latestDate = aggregateDates[0];
   if (!latestDate) {
-    const errors = [latestResult.error?.message, etfResult.error?.message].filter(Boolean);
+    const errors = [dateResult.error?.message, etfResult.error?.message].filter(Boolean);
     return {
       rows: [],
       range,
@@ -44,7 +45,12 @@ export async function fetchRotationData(rangeParam?: string): Promise<RotationDa
       error: errors.length > 0 ? errors.join("；") : null,
     };
   }
-  const startDate = latestDate ? rotationRangeStartDate(latestDate, range) : null;
+  const displayStartDate = rotationRangeStartDate(latestDate, range);
+  const calculationStartDate = aggregateDates.at(-1);
+  const startDate =
+    displayStartDate && calculationStartDate
+      ? [displayStartDate, calculationStartDate].sort()[0]
+      : displayStartDate;
   const records: IndustryRecord[] = [];
   let page = 0;
   let pageError: string | null = null;
@@ -78,7 +84,7 @@ export async function fetchRotationData(rangeParam?: string): Promise<RotationDa
     stockCount: r.stock_count,
     etfCountTotal: r.etf_count_total,
   }));
-  const errors = [latestResult.error?.message, pageError, etfResult.error?.message].filter(Boolean);
+  const errors = [dateResult.error?.message, pageError, etfResult.error?.message].filter(Boolean);
   return {
     rows,
     range,

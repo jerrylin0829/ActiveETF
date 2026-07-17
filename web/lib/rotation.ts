@@ -111,3 +111,13 @@ export function filterByRange(series: RotationSeries, fromDate: string): Rotatio
     ),
   };
 }
+
+export function filterRotationChartRange(
+  series: RotationSeries,
+  range: RotationRange,
+): RotationSeries {
+  const latestDate = series.dates.at(-1);
+  if (!latestDate) return series;
+  const startDate = rotationRangeStartDate(latestDate, range);
+  return startDate ? filterByRange(series, startDate) : series;
+}

@@ -3,6 +3,7 @@ import {
   buildRotationSeries,
   buildRotationTable,
   filterByRange,
+  filterRotationChartRange,
   topIndustries,
   type IndustryDaily,
 } from "@/lib/rotation";
@@ -78,5 +79,43 @@ describe("filterByRange", () => {
   it("起始日早於全部資料時原樣返回", () => {
     const series = buildRotationSeries(raw);
     expect(filterByRange(series, "2020-01-01")).toEqual(series);
+  });
+});
+
+describe("filterRotationChartRange", () => {
+  it("1M 圖表裁切曆月範圍但保留完整序列供 20 交易日計算", () => {
+    const dates = [
+      "2026-01-19",
+      "2026-01-21",
+      "2026-01-22",
+      "2026-01-23",
+      "2026-01-26",
+      "2026-01-27",
+      "2026-01-28",
+      "2026-01-29",
+      "2026-01-30",
+      "2026-02-02",
+      "2026-02-03",
+      "2026-02-04",
+      "2026-02-05",
+      "2026-02-06",
+      "2026-02-09",
+      "2026-02-10",
+      "2026-02-11",
+      "2026-02-12",
+      "2026-02-13",
+      "2026-02-19",
+      "2026-02-20",
+    ];
+    const fullSeries = buildRotationSeries(
+      dates.map((date, index) => d(date, "半導體業", 20 + index, 1)),
+    );
+
+    const chartSeries = filterRotationChartRange(fullSeries, "1M");
+    const table = buildRotationTable(fullSeries, { shortDays: 5, longDays: 20 });
+
+    expect(chartSeries.dates[0]).toBe("2026-01-21");
+    expect(chartSeries.dates).not.toContain("2026-01-19");
+    expect(table[0]?.longChangePct).toBe(20);
   });
 });

@@ -218,6 +218,10 @@ describe("fetchRotationData", () => {
 
   it("預設只查最新彙總日以前三個月", async () => {
     const executions = installSupabaseDouble({
+      dashboard_cross_dates: [
+        { trade_date: "2026-07-17" },
+        { trade_date: "2026-04-17" },
+      ],
       industry_weight_daily: [
         { trade_date: "2025-01-02", industry: "舊資料", sum_weight_pct: 1, stock_count: 1, etf_count_total: 2 },
         { trade_date: "2026-04-17", industry: "金融保險業", sum_weight_pct: 20, stock_count: 2, etf_count_total: 2 },
@@ -239,6 +243,55 @@ describe("fetchRotationData", () => {
     });
   });
 
+  it("1M 內不足 21 個交易日時向前取得第 20 個交易日前資料", async () => {
+    const dates = [
+      "2026-01-19",
+      "2026-01-21",
+      "2026-01-22",
+      "2026-01-23",
+      "2026-01-26",
+      "2026-01-27",
+      "2026-01-28",
+      "2026-01-29",
+      "2026-01-30",
+      "2026-02-02",
+      "2026-02-03",
+      "2026-02-04",
+      "2026-02-05",
+      "2026-02-06",
+      "2026-02-09",
+      "2026-02-10",
+      "2026-02-11",
+      "2026-02-12",
+      "2026-02-13",
+      "2026-02-19",
+      "2026-02-20",
+    ];
+    const executions = installSupabaseDouble({
+      dashboard_cross_dates: dates.map((tradeDate) => ({ trade_date: tradeDate })),
+      industry_weight_daily: dates.map((tradeDate, index) => ({
+        trade_date: tradeDate,
+        industry: "半導體業",
+        sum_weight_pct: 20 + index,
+        stock_count: 1,
+        etf_count_total: 1,
+      })),
+      etf: [{ etf_id: "00980A" }],
+    });
+
+    const result = await fetchRotationData("1M");
+
+    expect(result.rows[0]?.tradeDate).toBe("2026-01-19");
+    const pagedQuery = executions.find(
+      (query) => query.table === "industry_weight_daily" && query.range !== null,
+    );
+    expect(pagedQuery?.filters).toContainEqual({
+      kind: "gte",
+      column: "trade_date",
+      value: "2026-01-19",
+    });
+  });
+
   it("跨頁資料依 trade_date、industry 唯一排序", async () => {
     const rows = Array.from({ length: 1001 }, (_, i) => ({
       trade_date: "2026-07-17",
@@ -248,6 +301,7 @@ describe("fetchRotationData", () => {
       etf_count_total: 2,
     }));
     const executions = installSupabaseDouble({
+      dashboard_cross_dates: [{ trade_date: "2026-07-17" }],
       industry_weight_daily: rows,
       etf: [{ etf_id: "00980A" }],
     });
