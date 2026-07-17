@@ -8,7 +8,9 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20 分鐘在 2026-07-17 被證實不足：cache_daily_holding_closes（每日 close 快取）
+    # 與缺口日的還原價全面重抓會讓 metrics 階段超時，job 被砍在彙總步驟之前。
+    timeout-minutes: 45
     permissions:
       issues: write
     steps:
@@ -21,7 +23,8 @@ jobs:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
         run: uv run python -m activeetf.pipeline
       - name: Alert on failure
-        if: failure()
+        # timeout 取消在 Actions 語意是 cancelled 不是 failure，只寫 failure() 會靜默
+        if: failure() || cancelled()
         uses: actions/github-script@v7
         with:
           script: |
