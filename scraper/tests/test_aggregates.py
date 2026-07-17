@@ -1,7 +1,7 @@
 import os, datetime as dt
 import pytest
 from activeetf.models import Holding, Change
-from activeetf import db
+from activeetf import db, metrics
 
 pytestmark = pytest.mark.skipif(not os.environ.get("SUPABASE_DB_URL"),
                                 reason="needs SUPABASE_DB_URL")
@@ -59,6 +59,33 @@ def test_industry_weight_aggregation():
     assert rows["水泥工業"][2] == 1
     assert rows["水泥工業"][3] == 2          # two ETFs had a snapshot that day
     assert float(rows["未分類"][1]) == 5.0   # blank industry falls back to 未分類
+
+
+def test_daily_price_cache_values_holding_without_event(monkeypatch):
+    def fake_adj_prices(stock_id, start, end):
+        assert (stock_id, start, end) == ("_T92", str(D), str(D))
+        return [
+            {
+                "stock_id": stock_id,
+                "date": str(D),
+                "close": 50.0,
+                "raw_close": 52.0,
+            }
+        ]
+
+    monkeypatch.setattr(metrics.finmind, "adj_prices", fake_adj_prices)
+
+    metrics.cache_daily_holding_closes(D)
+    db.refresh_daily_aggregates(D)
+
+    with db.conn() as c:
+        row = c.execute(
+            """select total_value_twd from cross_holdings_daily
+               where trade_date=%s and stock_id='_T92'""",
+            (D,),
+        ).fetchone()
+    assert float(row[0]) == 52000.0
+
 
 def test_refresh_is_idempotent():
     db.refresh_daily_aggregates(D)

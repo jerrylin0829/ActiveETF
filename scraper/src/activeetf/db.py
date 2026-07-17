@@ -92,6 +92,22 @@ def known_stock_ids() -> set[str]:
         return {r[0] for r in c.execute("select stock_id from stock_info").fetchall()}
 
 
+def missing_holding_close_ids(d: dt.date) -> list[str]:
+    """Return Taiwan-listed holdings whose raw close is still missing for d."""
+    with conn() as c:
+        rows = c.execute(
+            """select distinct h.stock_id
+               from holdings_snapshot h
+               join stock_info si on si.stock_id = h.stock_id
+               left join stock_price p
+                 on p.stock_id = h.stock_id and p.trade_date = h.trade_date
+               where h.trade_date = %s and p.close is null
+               order by h.stock_id""",
+            (d,),
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
 def log_scrape(etf_id: str, d: dt.date, status: str, error: str | None = None) -> None:
     with conn() as c:
         c.execute("insert into scrape_log (etf_id, trade_date, status, error) values (%s,%s,%s,%s)",

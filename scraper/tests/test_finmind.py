@@ -66,6 +66,30 @@ def test_adj_prices_falls_back_to_two_suffix_when_tw_empty(monkeypatch):
                      "close": 88.8, "raw_close": 90.0}]
 
 
+def test_adj_prices_falls_back_to_two_suffix_when_tw_is_all_nan(monkeypatch):
+    idx = pd.to_datetime(["2026-07-01"])
+    tw_hist = pd.DataFrame(
+        {"Close": [float("nan")], "Adj Close": [float("nan")]}, index=idx
+    )
+    two_hist = pd.DataFrame({"Close": [90.0], "Adj Close": [88.8]}, index=idx)
+    monkeypatch.setattr(
+        finmind.yf,
+        "Ticker",
+        lambda s: _FakeTicker(s, {"6488.TW": tw_hist, "6488.TWO": two_hist}),
+    )
+
+    rows = finmind.adj_prices("6488", "2026-07-01", "2026-07-01")
+
+    assert rows == [
+        {
+            "stock_id": "6488",
+            "date": "2026-07-01",
+            "close": 88.8,
+            "raw_close": 90.0,
+        }
+    ]
+
+
 def test_adj_prices_returns_empty_when_no_suffix_has_data(monkeypatch):
     monkeypatch.setattr(finmind.yf, "Ticker", lambda s: _FakeTicker(s, {}))
     assert finmind.adj_prices("0000", "2026-07-01", "2026-07-01") == []
