@@ -199,14 +199,27 @@ def refresh_open_positions(today: dt.date, etf_ids: list[str] | None = None) -> 
                                if r.exit is None and r.entry <= today]
     earliest = min((r.entry for rounds in open_by_etf.values() for r in rounds),
                    default=today)
-    tri = load_tri_series(earliest, today)
+    window_starts = {
+        (etf_id, r.stock_id, r.entry): common_start
+        for etf_id, open_rounds in open_by_etf.items()
+        for r in open_rounds
+        if r.stock_id in tw_ids
+        if (common_start := db.latest_common_price_date(
+            r.stock_id, finmind.TAIEX_TRI, r.entry
+        )) is not None
+    }
+    tri_start = min(window_starts.values(), default=earliest)
+    tri = load_tri_series(tri_start, today)
     rows = []
     for etf_id, open_rounds in open_by_etf.items():
         for r in open_rounds:
             days = len([d for d in dates if r.entry < d <= today])
             sr = br = None
             if r.stock_id in tw_ids:
-                s = load_adj_series(r.stock_id, r.entry, today)
+                price_start = window_starts.get(
+                    (etf_id, r.stock_id, r.entry), r.entry
+                )
+                s = load_adj_series(r.stock_id, price_start, today)
                 sr, br = _common_window_returns(s, tri, r.entry, today)
             rows.append((etf_id, r.stock_id, r.entry, today, days,
                          None if sr is None else round(sr * 100, 4),

@@ -129,6 +129,26 @@ def snapshot_trading_dates(upto: dt.date) -> list[dt.date]:
     return [r[0] for r in rows]
 
 
+def latest_common_price_date(
+    stock_id: str,
+    benchmark_id: str,
+    upto: dt.date,
+) -> dt.date | None:
+    """Latest cached adjusted-close date shared by a stock and benchmark."""
+    with conn() as c:
+        row = c.execute(
+            """select max(stock.trade_date)
+               from stock_price stock
+               join stock_price benchmark on benchmark.trade_date = stock.trade_date
+               where stock.stock_id = %s and benchmark.stock_id = %s
+                 and stock.trade_date <= %s
+                 and stock.adj_close is not null
+                 and benchmark.adj_close is not null""",
+            (stock_id, benchmark_id, upto),
+        ).fetchone()
+    return row[0] if row else None
+
+
 def new_exit_events(etf_id: str) -> list[tuple]:
     """(trade_date, stock_id, change_type) NEW/EXIT only — radar rounds must not
     treat big ADDs as entries (that rule belongs to picking-score rounds)."""
