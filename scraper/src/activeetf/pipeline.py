@@ -51,6 +51,7 @@ def refresh_daily_outputs(today: dt.date) -> None:
     metrics.compute_all(today)
     metrics.cache_daily_holding_closes(today)
     db.refresh_daily_aggregates(today)
+    metrics.refresh_open_positions(today)   # handoff 2026-07-17: radar/detail rounds
 
 
 def main() -> int:

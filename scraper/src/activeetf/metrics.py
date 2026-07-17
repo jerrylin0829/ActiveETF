@@ -179,6 +179,44 @@ def _write_metrics(etf_id: str, d: dt.date, row: dict) -> None:
         )
 
 
+def refresh_open_positions(today: dt.date, etf_ids: list[str] | None = None) -> None:
+    """Rebuild open_position: every open NEW-initiated round with its
+    entry->today excess return vs TAIEX_TRI (handoff 2026-07-17).
+
+    Reuses build_rounds by feeding NEW/EXIT events only, so big ADDs never
+    spawn radar rounds. Stocks outside stock_info (foreign) or without prices
+    keep null returns — visible but honestly unpriceable.
+    """
+    if etf_ids is None:
+        with db.conn() as c:
+            etf_ids = [r[0] for r in c.execute("select etf_id from etf").fetchall()]
+    dates = db.snapshot_trading_dates(today)
+    tw_ids = db.known_stock_ids()
+    open_by_etf = {}
+    for etf_id in etf_ids:
+        events = [(d, sid, typ, 0, 0) for d, sid, typ in db.new_exit_events(etf_id)]
+        open_by_etf[etf_id] = [r for r in build_rounds(events)
+                               if r.exit is None and r.entry <= today]
+    earliest = min((r.entry for rounds in open_by_etf.values() for r in rounds),
+                   default=today)
+    tri = load_tri_series(earliest, today)
+    rows = []
+    for etf_id, open_rounds in open_by_etf.items():
+        for r in open_rounds:
+            days = len([d for d in dates if r.entry < d <= today])
+            sr = br = None
+            if r.stock_id in tw_ids:
+                s = load_adj_series(r.stock_id, r.entry, today)
+                sr = _window_return(s, r.entry, today)
+                br = _window_return(tri, r.entry, today)
+            rows.append((etf_id, r.stock_id, r.entry, today, days,
+                         None if sr is None else round(sr * 100, 4),
+                         None if br is None else round(br * 100, 4),
+                         None if sr is None or br is None
+                         else round((sr - br) * 100, 4)))
+    db.replace_open_positions(etf_ids, rows)
+
+
 def build_rounds(events: list[tuple]) -> list[Round]:
     """Build scoring rounds from holding changes."""
     entries_, exits = [], {}
