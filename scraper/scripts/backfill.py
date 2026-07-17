@@ -13,7 +13,8 @@ def main(start: str = START, today: dt.date | None = None) -> None:
     targets = [e.etf_id for e in entries()] + ["0050"]
     for sid in targets:
         rows = finmind.adj_prices(sid, start, end)
-        db.upsert_prices([(r["stock_id"], r["date"], None, r["close"]) for r in rows])
+        db.upsert_prices([(r["stock_id"], r["date"], r.get("raw_close"), r["close"])
+                          for r in rows])
         print(f"{sid}: {len(rows)} rows")
         time.sleep(1)
 

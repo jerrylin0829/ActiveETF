@@ -62,3 +62,29 @@ def test_already_scraped_skips():
     deps.snapshots[("00992A", D2)] = GOOD
     pipeline.scrape_one(_entry(), D2, deps)
     assert deps.logs == []   # 21:30 補抓場對已成功者直接略過
+
+
+def test_refresh_daily_outputs_caches_holding_closes_before_aggregate(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        pipeline.metrics, "compute_all", lambda today: calls.append(("metrics", today))
+    )
+    monkeypatch.setattr(
+        pipeline.metrics,
+        "cache_daily_holding_closes",
+        lambda today: calls.append(("closes", today)),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline.db,
+        "refresh_daily_aggregates",
+        lambda today: calls.append(("aggregates", today)),
+    )
+
+    pipeline.refresh_daily_outputs(D2)
+
+    assert calls == [
+        ("metrics", D2),
+        ("closes", D2),
+        ("aggregates", D2),
+    ]

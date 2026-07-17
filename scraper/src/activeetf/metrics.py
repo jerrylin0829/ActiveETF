@@ -95,7 +95,8 @@ def load_adj_series(stock_id: str, start: dt.date, end: dt.date) -> Series:
     if not s or max(s) < end:
         fetched = finmind.adj_prices(stock_id, str(start), str(end))
         db.upsert_prices(
-            [(r["stock_id"], r["date"], None, r.get("close")) for r in fetched]
+            [(r["stock_id"], r["date"], r.get("raw_close"), r.get("close"))
+             for r in fetched]
         )
         for r in fetched:
             s[dt.date.fromisoformat(r["date"])] = float(r["close"])
@@ -118,6 +119,19 @@ def load_tri_series(start: dt.date, end: dt.date) -> Series:
         for r in fetched:
             s[dt.date.fromisoformat(r["date"])] = float(r["price"])
     return s
+
+
+def cache_daily_holding_closes(today: dt.date) -> None:
+    """Cache today's raw closes for every Taiwan holding that still lacks one."""
+    for stock_id in db.missing_holding_close_ids(today):
+        fetched = finmind.adj_prices(stock_id, str(today), str(today))
+        if fetched:
+            db.upsert_prices(
+                [
+                    (r["stock_id"], r["date"], r.get("raw_close"), r.get("close"))
+                    for r in fetched
+                ]
+            )
 
 
 def compute_all(today: dt.date) -> None:

@@ -92,6 +92,22 @@ def known_stock_ids() -> set[str]:
         return {r[0] for r in c.execute("select stock_id from stock_info").fetchall()}
 
 
+def missing_holding_close_ids(d: dt.date) -> list[str]:
+    """Return Taiwan-listed holdings whose raw close is still missing for d."""
+    with conn() as c:
+        rows = c.execute(
+            """select distinct h.stock_id
+               from holdings_snapshot h
+               join stock_info si on si.stock_id = h.stock_id
+               left join stock_price p
+                 on p.stock_id = h.stock_id and p.trade_date = h.trade_date
+               where h.trade_date = %s and p.close is null
+               order by h.stock_id""",
+            (d,),
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
 def log_scrape(etf_id: str, d: dt.date, status: str, error: str | None = None) -> None:
     with conn() as c:
         c.execute("insert into scrape_log (etf_id, trade_date, status, error) values (%s,%s,%s,%s)",
@@ -103,3 +119,48 @@ def scraped_ok(etf_id: str, d: dt.date) -> bool:
         row = c.execute("""select 1 from scrape_log where etf_id=%s and trade_date=%s
                            and status='ok' limit 1""", (etf_id, d)).fetchone()
     return row is not None
+
+
+def refresh_daily_aggregates(d: dt.date) -> None:
+    """Recompute cross_holdings_daily and industry_weight_daily for one date.
+    delete + insert…select inside one transaction => idempotent rerun."""
+    with conn() as c, c.transaction():
+        c.execute("delete from cross_holdings_daily where trade_date=%s", (d,))
+        # sum(shares * close): price is per (stock, date) so it is identical on every
+        # joined row; if it is missing the whole sum collapses to null (wanted).
+        c.execute("""
+            insert into cross_holdings_daily
+              (trade_date, stock_id, etf_count, total_weight_pct, total_shares,
+               total_value_twd, new_count, add_count, trim_count, exit_count)
+            select h.trade_date, h.stock_id, count(*), sum(h.weight_pct), sum(h.shares),
+                   sum(h.shares * p.close),
+                   coalesce(max(c1.new_count), 0), coalesce(max(c1.add_count), 0),
+                   coalesce(max(c1.trim_count), 0), coalesce(max(c1.exit_count), 0)
+            from holdings_snapshot h
+            left join stock_price p
+              on p.stock_id = h.stock_id and p.trade_date = h.trade_date
+            left join (
+              select stock_id,
+                     count(*) filter (where change_type='NEW')  as new_count,
+                     count(*) filter (where change_type='ADD')  as add_count,
+                     count(*) filter (where change_type='TRIM') as trim_count,
+                     count(*) filter (where change_type='EXIT') as exit_count
+              from holding_change where trade_date = %s
+              group by stock_id
+            ) c1 on c1.stock_id = h.stock_id
+            where h.trade_date = %s
+            group by h.trade_date, h.stock_id""", (d, d))
+        c.execute("delete from industry_weight_daily where trade_date=%s", (d,))
+        c.execute("""
+            insert into industry_weight_daily
+              (trade_date, industry, sum_weight_pct, stock_count, etf_count_total)
+            select h.trade_date,
+                   coalesce(nullif(trim(si.industry), ''), '未分類'),
+                   sum(h.weight_pct), count(distinct h.stock_id),
+                   (select count(distinct etf_id) from holdings_snapshot
+                     where trade_date = %s)
+            from holdings_snapshot h
+            left join stock_info si on si.stock_id = h.stock_id
+            where h.trade_date = %s
+            group by h.trade_date, coalesce(nullif(trim(si.industry), ''), '未分類')""",
+            (d, d))
