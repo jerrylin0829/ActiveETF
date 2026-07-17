@@ -94,9 +94,10 @@ describe("today overview radar", () => {
     expect(positions.map((position) => [position.etfId, position.stockId])).toEqual([
       ["A", "2330"],
       ["B", "2330"],
+      ["D", "3008"],
     ]);
     expect(positions[0]).toMatchObject({
-      holdingTradingDays: 3,
+      holdingTradingDays: 2,
       sharedEtfCount: 2,
       sharedSignal: "2 檔 ETF 近期同步建倉",
       excessReturnPct: null,
@@ -114,13 +115,14 @@ describe("today overview radar", () => {
       "2026-07-14",
       [
         { etfId: "A", stockId: "2330", entryDate: "2026-07-10",
-          asOfDate: "2026-07-14", excessReturnPct: 12.334 },
+          asOfDate: "2026-07-14", holdingDays: 2, excessReturnPct: 12.334 },
         { etfId: "B", stockId: "9999", entryDate: "2026-07-13",
-          asOfDate: "2026-07-14", excessReturnPct: null }, // foreign/unpriceable
+          asOfDate: "2026-07-14", holdingDays: 1, excessReturnPct: null }, // foreign/unpriceable
       ],
     );
 
     expect(positions.find((p) => p.etfId === "A")).toMatchObject({
+      holdingTradingDays: 2,
       excessReturnPct: 12.334,
       excessReturnNote: null,
     });
@@ -136,15 +138,45 @@ describe("today overview radar", () => {
       tradingDates,
       "2026-07-13", // browsing an earlier date than the cache's as-of
       [{ etfId: "A", stockId: "2330", entryDate: "2026-07-10",
-         asOfDate: "2026-07-14", excessReturnPct: 3.2 }],
+         asOfDate: "2026-07-14", holdingDays: 2, excessReturnPct: 3.2 }],
     );
 
     expect(positions[0]).toMatchObject({ excessReturnPct: null, excessReturnNote: "—" });
   });
 
+  it("treats entry day as day 0 and keeps it in the radar", () => {
+    const positions = buildRadarPositions(
+      [{ ...baseEvent, etfId: "A", stockId: "2486", tradeDate: "2026-07-14", changeType: "NEW" }],
+      tradingDates,
+      "2026-07-14",
+      [{ etfId: "A", stockId: "2486", entryDate: "2026-07-14",
+         asOfDate: "2026-07-14", holdingDays: 0, excessReturnPct: 0 }],
+    );
+
+    expect(positions).toHaveLength(1);
+    expect(positions[0]).toMatchObject({ holdingTradingDays: 0, excessReturnPct: 0 });
+  });
+
+  it("keeps day 19 and excludes day 20 using pipeline holding_days", () => {
+    const events = [
+      { ...baseEvent, etfId: "A", stockId: "2330", tradeDate: "2026-06-17", changeType: "NEW" as const },
+      { ...baseEvent, etfId: "B", stockId: "2317", tradeDate: "2026-06-18", changeType: "NEW" as const },
+    ];
+    const positions = buildRadarPositions(events, tradingDates, "2026-07-14", [
+      { etfId: "A", stockId: "2330", entryDate: "2026-06-17",
+        asOfDate: "2026-07-14", holdingDays: 20, excessReturnPct: 1 },
+      { etfId: "B", stockId: "2317", entryDate: "2026-06-18",
+        asOfDate: "2026-07-14", holdingDays: 19, excessReturnPct: 2 },
+    ]);
+
+    expect(positions.map((position) => [position.etfId, position.holdingTradingDays])).toEqual([
+      ["B", 19],
+    ]);
+  });
+
   it("excludes open NEW positions once they reach 20 trading days", () => {
     const positions = buildRadarPositions(
-      [{ ...baseEvent, etfId: "A", stockId: "3008", tradeDate: "2026-06-17", changeType: "NEW" }],
+      [{ ...baseEvent, etfId: "A", stockId: "3008", tradeDate: "2026-06-16", changeType: "NEW" }],
       tradingDates,
       "2026-07-14",
     );

@@ -207,8 +207,7 @@ def refresh_open_positions(today: dt.date, etf_ids: list[str] | None = None) -> 
             sr = br = None
             if r.stock_id in tw_ids:
                 s = load_adj_series(r.stock_id, r.entry, today)
-                sr = _window_return(s, r.entry, today)
-                br = _window_return(tri, r.entry, today)
+                sr, br = _common_window_returns(s, tri, r.entry, today)
             rows.append((etf_id, r.stock_id, r.entry, today, days,
                          None if sr is None else round(sr * 100, 4),
                          None if br is None else round(br * 100, 4),
@@ -241,9 +240,30 @@ def build_rounds(events: list[tuple]) -> list[Round]:
 
 def _window_return(s: Series, start: dt.date, end: dt.date) -> float | None:
     a, b = _at_or_before(s, start), _at_or_before(s, end)
-    if a is None or b is None or a[0] == b[0] or a[1] == 0:
+    if a is None or b is None or a[1] == 0:
         return None
     return b[1] / a[1] - 1.0
+
+
+def _common_window_returns(
+    stock: Series,
+    bench: Series,
+    start: dt.date,
+    end: dt.date,
+) -> tuple[float | None, float | None]:
+    common_dates = stock.keys() & bench.keys()
+    starts = [d for d in common_dates if d <= start]
+    ends = [d for d in common_dates if d <= end]
+    if not starts or not ends:
+        return None, None
+    common_start = max(starts)
+    common_end = max(ends)
+    if common_end < common_start:
+        return None, None
+    return (
+        _window_return(stock, common_start, common_end),
+        _window_return(bench, common_start, common_end),
+    )
 
 
 def score_rounds(

@@ -32,6 +32,7 @@ export type OpenPositionRow = {
   stockId: string;
   entryDate: string;
   asOfDate: string;
+  holdingDays: number;
   excessReturnPct: number | null;
 };
 
@@ -171,7 +172,7 @@ export function buildCollectiveMovements(events: ChangeEvent[]): CollectiveMovem
 }
 
 function holdingTradingDays(tradingDates: string[], entryDate: string, selectedDate: string): number {
-  return tradingDates.filter((date) => date >= entryDate && date <= selectedDate).length;
+  return tradingDates.filter((date) => date > entryDate && date <= selectedDate).length;
 }
 
 export function buildRadarPositions(
@@ -180,10 +181,10 @@ export function buildRadarPositions(
   selectedDate: string,
   openPositionRows: OpenPositionRow[] = [],
 ): RadarPosition[] {
-  const excessByRound = new Map(
+  const cachedByRound = new Map(
     openPositionRows
       .filter((row) => row.asOfDate === selectedDate)
-      .map((row) => [`${row.etfId}:${row.stockId}:${row.entryDate}`, row.excessReturnPct]),
+      .map((row) => [`${row.etfId}:${row.stockId}:${row.entryDate}`, row]),
   );
   const excessFor = (
     etfId: string,
@@ -191,10 +192,10 @@ export function buildRadarPositions(
     entryDate: string,
   ): Pick<RadarPosition, "excessReturnPct" | "excessReturnNote"> => {
     const key = `${etfId}:${stockId}:${entryDate}`;
-    if (!excessByRound.has(key)) {
+    if (!cachedByRound.has(key)) {
       return { excessReturnPct: null, excessReturnNote: "—" };
     }
-    const pct = excessByRound.get(key) ?? null;
+    const pct = cachedByRound.get(key)?.excessReturnPct ?? null;
     return pct === null
       ? { excessReturnPct: null, excessReturnNote: "不適用" }
       : { excessReturnPct: pct, excessReturnNote: null };
@@ -218,19 +219,23 @@ export function buildRadarPositions(
   }
 
   const positions = Array.from(openPositions.values())
-    .map((event) => ({
-      etfId: event.etfId,
-      etfName: event.etfName,
-      issuer: event.issuer,
-      stockId: event.stockId,
-      stockName: event.stockName,
-      entryDate: event.tradeDate,
-      holdingTradingDays: holdingTradingDays(tradingDates, event.tradeDate, selectedDate),
-      sharedEtfCount: 1,
-      sharedSignal: null,
-      ...excessFor(event.etfId, event.stockId, event.tradeDate),
-    }))
-    .filter((position) => position.holdingTradingDays > 0 && position.holdingTradingDays < 20);
+    .map((event) => {
+      const cached = cachedByRound.get(`${event.etfId}:${event.stockId}:${event.tradeDate}`);
+      return {
+        etfId: event.etfId,
+        etfName: event.etfName,
+        issuer: event.issuer,
+        stockId: event.stockId,
+        stockName: event.stockName,
+        entryDate: event.tradeDate,
+        holdingTradingDays:
+          cached?.holdingDays ?? holdingTradingDays(tradingDates, event.tradeDate, selectedDate),
+        sharedEtfCount: 1,
+        sharedSignal: null,
+        ...excessFor(event.etfId, event.stockId, event.tradeDate),
+      };
+    })
+    .filter((position) => position.holdingTradingDays >= 0 && position.holdingTradingDays < 20);
 
   const countByStock = new Map<string, number>();
   for (const position of positions) {

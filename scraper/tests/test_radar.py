@@ -17,7 +17,7 @@ def _wipe():
         c.execute("delete from open_position where etf_id = '_TC'")
         for t in ("holding_change", "holdings_snapshot", "stock_price"):
             c.execute(f"delete from {t} where trade_date = any(%s)", (list(ALL_D),))
-        c.execute("delete from stock_info where stock_id in ('_T91','_T93')")
+        c.execute("delete from stock_info where stock_id in ('_T91','_T93','_T95','_T96')")
         c.execute("delete from etf where etf_id = '_TC'")
 
 
@@ -96,3 +96,47 @@ def test_refresh_is_idempotent_and_exit_disappears():
     db.write_changes("_TC", D5, [Change("_T91", "EXIT", -1900, -5.0)])
     metrics.refresh_open_positions(D5, etf_ids=["_TC"])
     assert "_T91" not in _rows()
+
+
+def test_returns_use_the_latest_common_end_date(monkeypatch):
+    with db.conn() as c:
+        c.execute(
+            "insert into stock_info (stock_id, name, industry, market) "
+            "values ('_T95','delta','水泥工業','twse')"
+        )
+        c.cursor().executemany(
+            "insert into stock_price (stock_id, trade_date, close, adj_close) "
+            "values (%s,%s,%s,%s)",
+            [("_T95", D1, 100, 100), ("_T95", D4, 110, 110)],
+        )
+    db.write_changes("_TC", D1, [Change("_T95", "NEW", 100, 1.0)])
+    monkeypatch.setattr(finmind, "adj_prices", lambda *_args: [])
+
+    metrics.refresh_open_positions(D5, etf_ids=["_TC"])
+
+    row = _rows()["_T95"]
+    assert round(float(row[3]), 2) == 10.0
+    assert round(float(row[4]), 2) == 3.0
+    assert round(float(row[5]), 2) == 7.0
+
+
+def test_same_day_new_with_complete_prices_is_zero_return():
+    with db.conn() as c:
+        c.execute(
+            "insert into stock_info (stock_id, name, industry, market) "
+            "values ('_T96','epsilon','水泥工業','twse')"
+        )
+        c.execute(
+            "insert into stock_price (stock_id, trade_date, close, adj_close) "
+            "values (%s,%s,%s,%s)",
+            ("_T96", D5, 100, 100),
+        )
+    db.write_changes("_TC", D5, [Change("_T96", "NEW", 100, 1.0)])
+
+    metrics.refresh_open_positions(D5, etf_ids=["_TC"])
+
+    row = _rows()["_T96"]
+    assert row[2] == 0
+    assert float(row[3]) == 0
+    assert float(row[4]) == 0
+    assert float(row[5]) == 0

@@ -53,6 +53,7 @@ type OpenPositionRecord = {
   stock_id: string;
   entry_date: string;
   as_of_date: string;
+  holding_days: number;
   excess_return_pct: number | string | null;
 };
 
@@ -319,10 +320,16 @@ export async function fetchTodayOverview({
         .range(from, to),
     ),
     supabase.from("etf").select("etf_id, name"),
-    supabase
-      .from("open_position")
-      .select("etf_id, stock_id, entry_date, as_of_date, excess_return_pct")
-      .lt("holding_days", 20),
+    fetchPaged<OpenPositionRecord>((from, to) =>
+      supabase
+        .from("open_position")
+        .select("etf_id, stock_id, entry_date, as_of_date, holding_days, excess_return_pct")
+        .lt("holding_days", 20)
+        .order("etf_id", { ascending: true })
+        .order("stock_id", { ascending: true })
+        .order("entry_date", { ascending: true })
+        .range(from, to),
+    ),
   ]);
 
   const allChangeRecords = [
@@ -350,12 +357,13 @@ export async function fetchTodayOverview({
       error: failure.error,
     }),
   );
-  const openPositionRows = ((openPositionsResult.data ?? []) as OpenPositionRecord[]).map(
+  const openPositionRows = openPositionsResult.data.map(
     (record) => ({
       etfId: record.etf_id,
       stockId: record.stock_id,
       entryDate: record.entry_date,
       asOfDate: record.as_of_date,
+      holdingDays: record.holding_days,
       excessReturnPct: toNumberOrNull(record.excess_return_pct),
     }),
   );
@@ -368,7 +376,7 @@ export async function fetchTodayOverview({
     scrapeFailuresResult.error,
     etfsResult.error?.message,
     stockNamesResult.error,
-    openPositionsResult.error?.message,
+    openPositionsResult.error,
   ].filter(Boolean);
 
   return {

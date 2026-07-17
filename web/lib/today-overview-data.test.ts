@@ -115,6 +115,8 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
     }
     if (this.selectedRange) {
       rows = rows.slice(this.selectedRange[0], this.selectedRange[1] + 1);
+    } else if (this.selectedLimit === null) {
+      rows = rows.slice(0, 1000);
     }
 
     return { data: rows, error: null };
@@ -220,5 +222,59 @@ describe("fetchTodayOverview", () => {
     const changeQueries = executions.filter((execution) => execution.table === "holding_change");
     expect(changeQueries.some((query) => query.range?.[0] === 1000)).toBe(true);
     expect(changeQueries.every((query) => query.orders.map((order) => order.column).join(",") === "trade_date,etf_id,stock_id")).toBe(true);
+  });
+
+  it("passes cached holding_days through to the latest-day radar", async () => {
+    installSupabaseDouble({
+      holding_change: [{
+        etf_id: "00987A",
+        trade_date: "2026-07-14",
+        stock_id: "2486",
+        change_type: "NEW",
+        shares_delta: 1000,
+        weight_delta_pct: 1,
+        etf: { name: "台新優勢成長", issuer: "台新" },
+      }],
+      open_position: [{
+        etf_id: "00987A",
+        stock_id: "2486",
+        entry_date: "2026-07-14",
+        as_of_date: "2026-07-14",
+        holding_days: 0,
+        excess_return_pct: 0,
+      }],
+    });
+
+    const result = await fetchTodayOverview({ date: "2026-07-14" });
+
+    expect(result.radarPositions[0]).toMatchObject({
+      holdingTradingDays: 0,
+      excessReturnPct: 0,
+    });
+  });
+
+  it("pages open_position with deterministic primary-key ordering", async () => {
+    const positions = Array.from({ length: 1001 }, (_, index) => ({
+      etf_id: "00987A",
+      stock_id: String(index).padStart(4, "0"),
+      entry_date: "2026-07-14",
+      as_of_date: "2026-07-14",
+      holding_days: 0,
+      excess_return_pct: 0,
+    }));
+    const executions = installSupabaseDouble({ open_position: positions });
+
+    await fetchTodayOverview({ date: "2026-07-14" });
+
+    const positionQueries = executions.filter(
+      (execution) => execution.table === "open_position",
+    );
+    expect(positionQueries.some((query) => query.range?.[0] === 1000)).toBe(true);
+    expect(
+      positionQueries.every(
+        (query) => query.orders.map((order) => order.column).join(",") ===
+          "etf_id,stock_id,entry_date",
+      ),
+    ).toBe(true);
   });
 });
