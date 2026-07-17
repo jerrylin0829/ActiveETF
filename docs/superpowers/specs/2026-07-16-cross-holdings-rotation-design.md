@@ -72,7 +72,8 @@ create table industry_weight_daily (
 
 ### 3.3 Pipeline 與 backfill
 
-- 每日流程在寫完 snapshot 與 events 後新增彙總步驟：單一 `insert ... select` 在 DB 端聚合；先 `delete` 當日再 `insert`，重跑冪等
+- 每日流程在寫完 snapshot 與 events 後，依序執行：`metrics.compute_all` → `cache_daily_holding_closes`（補當日仍缺未還原收盤價的台股持股，海外持股經 `stock_info` join 天然排除）→ 彙總步驟（2026-07-17 補記：close 快取為金額欄的資料前提，實作於 PR #9 評審期）
+- 彙總步驟：單一 `insert ... select` 在 DB 端聚合；先 `delete` 當日再 `insert`，重跑冪等
 - 兩表皆可從 `holdings_snapshot` 全期重算（符合主 spec 資料原則 1）；新增一次性腳本 `scripts/backfill_aggregates.py` 補齊上線以來全部歷史，輪動圖上線首日即有完整時間序列
 - RLS：比照既有表，匿名唯讀
 
@@ -131,6 +132,7 @@ create table industry_weight_daily (
 
 - 點表格某產業 = 在圖表勾選該產業
 - 5 日/20 日變化以「交易日」計，跨越缺資料日照算不中斷
+- 圖表的時間範圍切換**只影響顯示**：5 日/20 日變化永遠以完整序列計算，不受範圍篩選影響（2026-07-17 補記，實作於 PR #9 評審期）
 
 **資料缺口**：`etf_count_total` 小於全體檔數的日期照畫（平均值仍正確）；檢視當日時黃條註明基於幾檔資料。
 

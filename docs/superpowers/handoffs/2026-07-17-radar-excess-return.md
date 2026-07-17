@@ -2,7 +2,7 @@
 
 Planner：Claude Code ｜ 日期：2026-07-17 ｜ 目標分支前綴：`codex/`
 
-**狀態：待 User 核可後才可開工。** 本片未經 brainstorming 審核，以下六個設計決策為 Planner 建議值，標注「⚖️ 待裁決」者需 User 拍板；其餘若 Evaluator 無異議即視為定案。
+**狀態：已核可，可開工。** 2026-07-17 User 裁決：兩個 ⚖️ 項皆採 Planner 建議（A 案）——存量持股排除、海外持股列入但超額報酬顯示「不適用」。六個設計決策全部定案。
 
 ## Goal
 
@@ -40,7 +40,7 @@ create table radar_position (
 ### 3. EXIT、重新 NEW、TRIM 的處理
 
 - 回合切分**直接重用 `metrics.py` 的 `build_rounds()`**：EXIT 結束回合（移出雷達）；EXIT 後再 NEW = 新回合、新 `entry_date`；TRIM 不結束回合、不影響 entry_date；ADD 同樣不影響
-- ⚖️ 待裁決：資料起始日之前就存在的持股（首日快照就有、無 NEW 事件）**建議明確排除**——沒有可信的 entry_date，寧缺勿錯
+- ✅ 已裁決（2026-07-17）：資料起始日之前就存在的持股（首日快照就有、無 NEW 事件）**明確排除**——沒有可信的 entry_date，寧缺勿錯
 
 ### 4. 20 個交易日的計算
 
@@ -51,7 +51,7 @@ create table radar_position (
 
 ### 5. 海外持股
 
-- ⚖️ 待裁決，Planner 建議：**照樣列入雷達**（持有天數、「N 檔同步建倉」共同訊號照算），但 `excess_return_pct` 為 null、前端顯示「不適用」——台股加權報酬指數對海外標的不是有意義的基準；完全隱藏則違反「缺資料要可見」精神
+- ✅ 已裁決（2026-07-17）：**照樣列入雷達**（持有天數、「N 檔同步建倉」共同訊號照算），但 `excess_return_pct` 為 null、前端顯示「不適用」——台股加權報酬指數對海外標的不是有意義的基準；完全隱藏則違反「缺資料要可見」精神
 - 個股還原價缺漏（yfinance 抓不到）同樣以 null 呈現，不湊數
 
 ### 6. Pipeline 更新與 backfill 策略
