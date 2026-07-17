@@ -1,6 +1,6 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { RotationDashboard } from "@/components/rotation-dashboard";
 import type { IndustryDaily } from "@/lib/rotation";
@@ -50,5 +50,39 @@ describe("RotationDashboard", () => {
   it("空資料顯示空狀態", () => {
     render(<RotationDashboard rows={[]} />);
     expect(screen.getByText(/尚無彙總資料/)).toBeInTheDocument();
+  });
+
+  it("時間範圍透過 URL 重新查詢 server，並標示目前範圍", () => {
+    render(<RotationDashboard rows={rows} range="6M" />);
+
+    expect(screen.getByRole("link", { name: "6M" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "1M" })).toHaveAttribute(
+      "href",
+      "/rotation?range=1M",
+    );
+  });
+
+  it("沒有 ResizeObserver 時仍依容器寬度顯示單日資料 marker", async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 640,
+      height: 320,
+      top: 0,
+      right: 640,
+      bottom: 320,
+      left: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    try {
+      render(<RotationDashboard rows={rows.slice(0, 2)} />);
+
+      await waitFor(() => expect(document.querySelector(".recharts-surface")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(document.querySelectorAll(".recharts-reference-dot-dot").length).toBeGreaterThan(0),
+      );
+    } finally {
+      rectSpy.mockRestore();
+    }
   });
 });

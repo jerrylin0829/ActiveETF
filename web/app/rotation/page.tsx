@@ -5,8 +5,13 @@ import { fetchRotationData } from "@/lib/rotation-data";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function RotationPage() {
-  const result = await fetchRotationData();
+type RotationPageProps = {
+  searchParams?: Promise<{ range?: string }>;
+};
+
+export default async function RotationPage({ searchParams }: RotationPageProps) {
+  const params = await searchParams;
+  const result = await fetchRotationData(params?.range);
   const latest = result.rows[result.rows.length - 1];
 
   return (
@@ -28,7 +33,7 @@ export default async function RotationPage() {
           </p>
         )}
       </header>
-      <RotationDashboard rows={result.rows} />
+      <RotationDashboard key={result.range} rows={result.rows} range={result.range} />
     </main>
   );
 }

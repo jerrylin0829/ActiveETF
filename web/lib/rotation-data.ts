@@ -1,5 +1,10 @@
 import { createReadOnlySupabaseClient } from "@/lib/supabase";
-import type { IndustryDaily } from "@/lib/rotation";
+import {
+  normalizeRotationRange,
+  rotationRangeStartDate,
+  type IndustryDaily,
+  type RotationRange,
+} from "@/lib/rotation";
 
 type IndustryRecord = {
   trade_date: string;
@@ -11,23 +16,49 @@ type IndustryRecord = {
 
 export type RotationDataResult = {
   rows: IndustryDaily[];
+  range: RotationRange;
   etfCountTotal: number; // etf table rows, 黃條分母
   error: string | null;
 };
 
 const pageSize = 1000;
 
-export async function fetchRotationData(): Promise<RotationDataResult> {
+export async function fetchRotationData(rangeParam?: string): Promise<RotationDataResult> {
   const supabase = createReadOnlySupabaseClient();
+  const range = normalizeRotationRange(rangeParam);
+  const [latestResult, etfResult] = await Promise.all([
+    supabase
+      .from("industry_weight_daily")
+      .select("trade_date")
+      .order("trade_date", { ascending: false })
+      .limit(1),
+    supabase.from("etf").select("etf_id"),
+  ]);
+  const latestDate = latestResult.data?.[0]?.trade_date as string | undefined;
+  if (!latestDate) {
+    const errors = [latestResult.error?.message, etfResult.error?.message].filter(Boolean);
+    return {
+      rows: [],
+      range,
+      etfCountTotal: (etfResult.data ?? []).length,
+      error: errors.length > 0 ? errors.join("；") : null,
+    };
+  }
+  const startDate = latestDate ? rotationRangeStartDate(latestDate, range) : null;
   const records: IndustryRecord[] = [];
   let page = 0;
   let pageError: string | null = null;
   while (true) {
     const from = page * pageSize;
-    const { data, error } = await supabase
+    let query = supabase
       .from("industry_weight_daily")
-      .select("trade_date, industry, sum_weight_pct, stock_count, etf_count_total")
+      .select("trade_date, industry, sum_weight_pct, stock_count, etf_count_total");
+    if (startDate) {
+      query = query.gte("trade_date", startDate);
+    }
+    const { data, error } = await query
       .order("trade_date", { ascending: true })
+      .order("industry", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) {
       pageError = error.message;
@@ -40,8 +71,6 @@ export async function fetchRotationData(): Promise<RotationDataResult> {
     }
     page += 1;
   }
-  const { data: etfData, error: etfError } = await supabase.from("etf").select("etf_id");
-
   const rows: IndustryDaily[] = records.map((r) => ({
     tradeDate: r.trade_date,
     industry: r.industry,
@@ -49,10 +78,11 @@ export async function fetchRotationData(): Promise<RotationDataResult> {
     stockCount: r.stock_count,
     etfCountTotal: r.etf_count_total,
   }));
-  const errors = [pageError, etfError?.message].filter(Boolean);
+  const errors = [latestResult.error?.message, pageError, etfResult.error?.message].filter(Boolean);
   return {
     rows,
-    etfCountTotal: (etfData ?? []).length,
+    range,
+    etfCountTotal: (etfResult.data ?? []).length,
     error: errors.length > 0 ? errors.join("；") : null,
   };
 }

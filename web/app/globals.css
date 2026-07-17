@@ -84,6 +84,14 @@
   --surface-tint: oklch(0.94 0.018 95);
   --market-up: #d21f2b;
   --market-down: #168a4a;
+  --rotation-chart-1: #b4232c;
+  --rotation-chart-2: #1769aa;
+  --rotation-chart-3: #15803d;
+  --rotation-chart-4: #a44908;
+  --rotation-chart-5: #7e22ce;
+  --rotation-chart-6: #0f766e;
+  --rotation-chart-7: #be185d;
+  --rotation-chart-8: #4d7c0f;
 }
 
 .dark {
@@ -121,6 +129,14 @@
   --surface-tint: oklch(0.205 0.02 255);
   --market-up: #ff6b72;
   --market-down: #45c77a;
+  --rotation-chart-1: #ff6b72;
+  --rotation-chart-2: #60a5fa;
+  --rotation-chart-3: #4ade80;
+  --rotation-chart-4: #fbbf24;
+  --rotation-chart-5: #c084fc;
+  --rotation-chart-6: #2dd4bf;
+  --rotation-chart-7: #f472b6;
+  --rotation-chart-8: #a3e635;
 }
 
 @layer base {

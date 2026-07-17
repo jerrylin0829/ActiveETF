@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Legend,
   Line,
   LineChart,
-  ResponsiveContainer,
+  ReferenceDot,
   Tooltip,
   XAxis,
   YAxis,
@@ -24,13 +25,14 @@ import { formatPct, formatSignedPct } from "@/lib/format";
 import {
   buildRotationSeries,
   buildRotationTable,
-  filterByRange,
   topIndustries,
   type IndustryDaily,
+  type RotationRange,
 } from "@/lib/rotation";
 
 type RotationDashboardProps = {
   rows: IndustryDaily[];
+  range?: RotationRange;
 };
 
 const RANGES = [
@@ -39,45 +41,50 @@ const RANGES = [
   { key: "6M", months: 6 },
   { key: "all", months: null },
 ] as const;
-type RangeKey = (typeof RANGES)[number]["key"];
-
-// chart palette: shadcn theme tokens with hex fallbacks
 const COLORS = [
-  "var(--chart-1, #e05d5d)",
-  "var(--chart-2, #4f9cf9)",
-  "var(--chart-3, #58b368)",
-  "var(--chart-4, #d9a24a)",
-  "var(--chart-5, #9d6ff2)",
-  "#5bc8c8",
-  "#e07db8",
-  "#8a9a5b",
+  "var(--rotation-chart-1)",
+  "var(--rotation-chart-2)",
+  "var(--rotation-chart-3)",
+  "var(--rotation-chart-4)",
+  "var(--rotation-chart-5)",
+  "var(--rotation-chart-6)",
+  "var(--rotation-chart-7)",
+  "var(--rotation-chart-8)",
 ];
 
-export function RotationDashboard({ rows }: RotationDashboardProps) {
+export function RotationDashboard({ rows, range = "3M" }: RotationDashboardProps) {
   const series = useMemo(() => buildRotationSeries(rows), [rows]);
   const [selected, setSelected] = useState<string[]>(() => topIndustries(series, 6));
-  const [range, setRange] = useState<RangeKey>("3M");
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+
+  useEffect(() => {
+    const container = chartContainerRef.current;
+    if (!container) return;
+
+    const updateWidth = () => setChartWidth(Math.floor(container.getBoundingClientRect().width));
+    updateWidth();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateWidth);
+    observer?.observe(container);
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, []);
 
   const table = useMemo(
     () => buildRotationTable(series, { shortDays: 5, longDays: 20 }),
     [series],
   );
-  const visibleSeries = useMemo(() => {
-    const months = RANGES.find((r) => r.key === range)?.months;
-    if (!months || series.dates.length === 0) return series;
-    const from = new Date(series.dates[series.dates.length - 1]);
-    from.setMonth(from.getMonth() - months);
-    return filterByRange(series, from.toISOString().slice(0, 10));
-  }, [series, range]);
   const chartData = useMemo(
     () =>
-      visibleSeries.dates.map((date, i) => ({
+      series.dates.map((date, i) => ({
         date,
-        ...Object.fromEntries(
-          selected.map((ind) => [ind, visibleSeries.byIndustry[ind]?.[i] ?? null]),
-        ),
+        ...Object.fromEntries(selected.map((ind) => [ind, series.byIndustry[ind]?.[i] ?? null])),
       })),
-    [visibleSeries, selected],
+    [series, selected],
   );
 
   if (rows.length === 0) {
@@ -106,10 +113,11 @@ export function RotationDashboard({ rows }: RotationDashboardProps) {
     <div className="grid gap-6">
       <div className="flex flex-wrap gap-2">
         {RANGES.map((r) => (
-          <button
+          <Link
             key={r.key}
-            type="button"
-            onClick={() => setRange(r.key)}
+            href={`/rotation?range=${r.key}`}
+            prefetch={false}
+            aria-current={range === r.key ? "page" : undefined}
             className={`rounded-md border px-3 py-1 text-sm transition-colors ${
               range === r.key
                 ? "border-primary bg-primary text-primary-foreground"
@@ -117,12 +125,12 @@ export function RotationDashboard({ rows }: RotationDashboardProps) {
             }`}
           >
             {r.key === "all" ? "全部" : r.key}
-          </button>
+          </Link>
         ))}
       </div>
-      <div className="h-80 w-full">
-        <ResponsiveContainer>
-          <LineChart data={chartData}>
+      <div ref={chartContainerRef} className="h-80 w-full min-w-0">
+        {chartWidth > 0 && (
+          <LineChart width={chartWidth} height={320} data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="date" fontSize={12} minTickGap={40} />
             <YAxis fontSize={12} unit="%" width={48} />
@@ -136,11 +144,25 @@ export function RotationDashboard({ rows }: RotationDashboardProps) {
                 type="monotone"
                 stroke={COLORS[i % COLORS.length]}
                 strokeWidth={2}
-                connectNulls
+                isAnimationActive={false}
               />
             ))}
+            {series.dates.length === 1 &&
+              selected.map((industry, index) => {
+                const value = series.byIndustry[industry]?.[0];
+                return value === null || value === undefined ? null : (
+                  <ReferenceDot
+                    key={`single-${industry}`}
+                    x={series.dates[0]}
+                    y={value}
+                    r={4}
+                    fill={COLORS[index % COLORS.length]}
+                    stroke={COLORS[index % COLORS.length]}
+                  />
+                );
+              })}
           </LineChart>
-        </ResponsiveContainer>
+        )}
       </div>
       <div className="overflow-x-auto">
         <Table>

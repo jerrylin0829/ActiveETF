@@ -30,6 +30,22 @@ describe("buildRotationSeries", () => {
     expect(series.dates).toEqual(["2026-07-10", "2026-07-11", "2026-07-14"]);
     expect(series.byIndustry["半導體業"]).toEqual([40, 42, 45]);
   });
+
+  it("有效彙總日缺少產業 row 時視為 0，之後可重新出現", () => {
+    const series = buildRotationSeries([
+      d("2026-07-10", "半導體業", 20),
+      d("2026-07-10", "金融保險業", 10),
+      d("2026-07-11", "金融保險業", 12),
+      d("2026-07-14", "半導體業", 10),
+      d("2026-07-14", "金融保險業", 14),
+    ]);
+
+    expect(series.byIndustry["半導體業"]).toEqual([10, 0, 5]);
+    const semi = buildRotationTable(series, { shortDays: 2, longDays: 20 }).find(
+      (row) => row.industry === "半導體業",
+    );
+    expect(semi?.shortChangePct).toBe(-5);
+  });
 });
 
 describe("topIndustries", () => {

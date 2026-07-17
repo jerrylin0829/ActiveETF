@@ -28,6 +28,12 @@ type ChangeRecord = {
   change_type: string;
 };
 
+type StockInfoRecord = {
+  stock_id: string;
+  name: string;
+  industry: string | null;
+};
+
 export type CrossHoldingsResult = {
   date: string | null; // resolved trade date (latest if not given)
   availableDates: string[]; // for the date selector, desc
@@ -39,6 +45,7 @@ export type CrossHoldingsResult = {
 };
 
 const pageSize = 1000;
+const stockInfoChunkSize = 200;
 
 function toNumber(value: number | string | null): number | null {
   if (value === null) return null;
@@ -58,16 +65,20 @@ async function fetchAllByDate<T>(
   table: string,
   select: string,
   date: string,
+  orderColumns: string[],
 ): Promise<{ data: T[]; error: string | null }> {
   const records: T[] = [];
   let page = 0;
   while (true) {
     const from = page * pageSize;
-    const { data, error } = await supabase
+    let query = supabase
       .from(table)
       .select(select)
-      .eq("trade_date", date)
-      .range(from, from + pageSize - 1);
+      .eq("trade_date", date);
+    for (const column of orderColumns) {
+      query = query.order(column, { ascending: true });
+    }
+    const { data, error } = await query.range(from, from + pageSize - 1);
     if (error) {
       return { data: records, error: error.message };
     }
@@ -78,6 +89,30 @@ async function fetchAllByDate<T>(
     }
     page += 1;
   }
+}
+
+async function fetchStockInfo(
+  supabase: ReturnType<typeof createReadOnlySupabaseClient>,
+  stockIds: string[],
+): Promise<{ data: StockInfoRecord[]; error: string | null }> {
+  const chunks = Array.from(
+    { length: Math.ceil(stockIds.length / stockInfoChunkSize) },
+    (_, index) => stockIds.slice(index * stockInfoChunkSize, (index + 1) * stockInfoChunkSize),
+  );
+  const results = await Promise.all(
+    chunks.map((chunk) =>
+      supabase
+        .from("stock_info")
+        .select("stock_id, name, industry")
+        .in("stock_id", chunk)
+        .order("stock_id", { ascending: true }),
+    ),
+  );
+  const errors = results.map((result) => result.error?.message).filter(Boolean);
+  return {
+    data: results.flatMap((result) => (result.data ?? []) as StockInfoRecord[]),
+    error: errors.length > 0 ? errors.join("；") : null,
+  };
 }
 
 export async function fetchCrossHoldings(dateParam?: string): Promise<CrossHoldingsResult> {
@@ -107,21 +142,31 @@ export async function fetchCrossHoldings(dateParam?: string): Promise<CrossHoldi
     return { ...empty, availableDates };
   }
 
-  const [crossRes, holdingRes, changeRes, etfRes, stockRes] = await Promise.all([
-    fetchAllByDate<CrossRecord>(supabase, "cross_holdings_daily", "*", date),
+  const [crossRes, holdingRes, changeRes, etfRes] = await Promise.all([
+    fetchAllByDate<CrossRecord>(supabase, "cross_holdings_daily", "*", date, ["stock_id"]),
     fetchAllByDate<HoldingRecord>(
       supabase,
       "holdings_snapshot",
       "etf_id, stock_id, shares, weight_pct, etf(name)",
       date,
+      ["etf_id", "stock_id"],
     ),
-    fetchAllByDate<ChangeRecord>(supabase, "holding_change", "etf_id, stock_id, change_type", date),
+    fetchAllByDate<ChangeRecord>(
+      supabase,
+      "holding_change",
+      "etf_id, stock_id, change_type",
+      date,
+      ["etf_id", "stock_id"],
+    ),
     supabase.from("etf").select("etf_id"),
-    supabase.from("stock_info").select("stock_id, name, industry"),
   ]);
+  const stockRes = await fetchStockInfo(
+    supabase,
+    Array.from(new Set(crossRes.data.map((record) => record.stock_id))),
+  );
 
   const stockInfo = new Map(
-    (stockRes.data ?? []).map((s) => [
+    stockRes.data.map((s) => [
       s.stock_id as string,
       { name: (s.name as string) || s.stock_id, industry: (s.industry as string) || "未分類" },
     ]),
@@ -166,7 +211,7 @@ export async function fetchCrossHoldings(dateParam?: string): Promise<CrossHoldi
     holdingRes.error,
     changeRes.error,
     etfRes.error?.message,
-    stockRes.error?.message,
+    stockRes.error,
   ].filter(Boolean);
 
   return {
