@@ -48,6 +48,14 @@ type DateRecord = {
   trade_date: string;
 };
 
+type OpenPositionRecord = {
+  etf_id: string;
+  stock_id: string;
+  entry_date: string;
+  as_of_date: string;
+  excess_return_pct: number | string | null;
+};
+
 const pageSize = 1000;
 const changeSelect = `
   etf_id,
@@ -63,6 +71,12 @@ const radarWindowSize = 20;
 function toNumber(value: number | string): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toNumberOrNull(value: number | string | null): number | null {
+  if (value === null) return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function relatedEtf(value: EtfRelation): { name: string; issuer: string } | null {
@@ -260,6 +274,7 @@ export async function fetchTodayOverview({
     radarChangesResult,
     scrapeFailuresResult,
     etfsResult,
+    openPositionsResult,
   ] = await Promise.all([
     fetchPaged<HoldingChangeRecord>((from, to) =>
       supabase
@@ -304,6 +319,10 @@ export async function fetchTodayOverview({
         .range(from, to),
     ),
     supabase.from("etf").select("etf_id, name"),
+    supabase
+      .from("open_position")
+      .select("etf_id, stock_id, entry_date, as_of_date, excess_return_pct")
+      .lt("holding_days", 20),
   ]);
 
   const allChangeRecords = [
@@ -331,6 +350,15 @@ export async function fetchTodayOverview({
       error: failure.error,
     }),
   );
+  const openPositionRows = ((openPositionsResult.data ?? []) as OpenPositionRecord[]).map(
+    (record) => ({
+      etfId: record.etf_id,
+      stockId: record.stock_id,
+      entryDate: record.entry_date,
+      asOfDate: record.as_of_date,
+      excessReturnPct: toNumberOrNull(record.excess_return_pct),
+    }),
+  );
   const errors = [
     dateResult.error,
     tradingDatesResult.error,
@@ -340,6 +368,7 @@ export async function fetchTodayOverview({
     scrapeFailuresResult.error,
     etfsResult.error?.message,
     stockNamesResult.error,
+    openPositionsResult.error?.message,
   ].filter(Boolean);
 
   return {
@@ -353,6 +382,7 @@ export async function fetchTodayOverview({
       radarEvents,
       radarTradingDates,
       selectedDate,
+      openPositionRows,
     ),
     warnings: buildOverviewDataGapWarnings(scrapeFailures),
     error: errors.length > 0 ? errors.join("；") : null,

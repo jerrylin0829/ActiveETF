@@ -3,6 +3,7 @@ import { AlertCircle, ArrowDownRight, ArrowUpRight, Radar } from "lucide-react";
 
 import { DataGapAlerts } from "@/components/data-gap-alerts";
 import { DateSelector } from "@/components/date-selector";
+import { formatSignedPct } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { SiteNav } from "@/components/site-nav";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -231,8 +232,22 @@ function NewPositionRadar({ overview }: { overview: TodayOverviewViewModel }) {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 align-top">
-                    <Badge variant="outline">{position.excessReturnLabel}</Badge>
+                  <td className="px-3 py-2 align-top font-mono tabular-nums">
+                    {position.excessReturnNote ? (
+                      <span className="text-muted-foreground">{position.excessReturnNote}</span>
+                    ) : (
+                      <span
+                        className={
+                          Math.abs(position.excessReturnPct ?? 0) >= 10
+                            ? position.excessReturnPct! >= 0
+                              ? "font-semibold text-[var(--market-up)]"
+                              : "font-semibold text-[var(--market-down)]"
+                            : undefined
+                        }
+                      >
+                        {formatSignedPct(position.excessReturnPct)}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

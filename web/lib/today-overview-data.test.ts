@@ -15,7 +15,7 @@ type DataRecord = Record<string, unknown>;
 
 type QueryExecution = {
   table: string;
-  filters: Array<{ kind: "eq" | "gte" | "lte" | "in"; column: string; value: unknown }>;
+  filters: Array<{ kind: "eq" | "gte" | "lte" | "lt" | "in"; column: string; value: unknown }>;
   orders: Array<{ column: string; ascending: boolean }>;
   range: [number, number] | null;
 };
@@ -48,6 +48,11 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
 
   lte(column: string, value: unknown) {
     this.filters.push({ kind: "lte", column, value });
+    return this;
+  }
+
+  lt(column: string, value: unknown) {
+    this.filters.push({ kind: "lt", column, value });
     return this;
   }
 
@@ -92,6 +97,7 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
         if (filter.kind === "eq") return value === filter.value;
         if (filter.kind === "gte") return String(value) >= String(filter.value);
         if (filter.kind === "lte") return String(value) <= String(filter.value);
+        if (filter.kind === "lt") return Number(value) < Number(filter.value);
         return (filter.value as unknown[]).includes(value);
       }),
     );
@@ -124,6 +130,7 @@ function installSupabaseDouble(overrides: Partial<Record<string, DataRecord[]>> 
     scrape_log: [],
     etf: [{ etf_id: "00987A", name: "台新優勢成長" }],
     stock_info: [],
+    open_position: [],
     ...overrides,
   };
   const client = {

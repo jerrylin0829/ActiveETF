@@ -27,6 +27,14 @@ export type CollectiveMovements = {
   decreases: CollectiveMove[];
 };
 
+export type OpenPositionRow = {
+  etfId: string;
+  stockId: string;
+  entryDate: string;
+  asOfDate: string;
+  excessReturnPct: number | null;
+};
+
 export type RadarPosition = {
   etfId: string;
   etfName: string;
@@ -37,7 +45,9 @@ export type RadarPosition = {
   holdingTradingDays: number;
   sharedEtfCount: number;
   sharedSignal: string | null;
-  excessReturnLabel: "待上線";
+  excessReturnPct: number | null;
+  // "—": 歷史日期或快取未涵蓋（買進至今報酬只提供最新交易日）；"不適用": 海外/缺價
+  excessReturnNote: "不適用" | "—" | null;
 };
 
 export type RangeOption = {
@@ -168,7 +178,27 @@ export function buildRadarPositions(
   events: ChangeEvent[],
   tradingDates: string[],
   selectedDate: string,
+  openPositionRows: OpenPositionRow[] = [],
 ): RadarPosition[] {
+  const excessByRound = new Map(
+    openPositionRows
+      .filter((row) => row.asOfDate === selectedDate)
+      .map((row) => [`${row.etfId}:${row.stockId}:${row.entryDate}`, row.excessReturnPct]),
+  );
+  const excessFor = (
+    etfId: string,
+    stockId: string,
+    entryDate: string,
+  ): Pick<RadarPosition, "excessReturnPct" | "excessReturnNote"> => {
+    const key = `${etfId}:${stockId}:${entryDate}`;
+    if (!excessByRound.has(key)) {
+      return { excessReturnPct: null, excessReturnNote: "—" };
+    }
+    const pct = excessByRound.get(key) ?? null;
+    return pct === null
+      ? { excessReturnPct: null, excessReturnNote: "不適用" }
+      : { excessReturnPct: pct, excessReturnNote: null };
+  };
   const openPositions = new Map<string, ChangeEvent>();
   const orderedEvents = [...events]
     .filter((event) => event.tradeDate <= selectedDate)
@@ -198,7 +228,7 @@ export function buildRadarPositions(
       holdingTradingDays: holdingTradingDays(tradingDates, event.tradeDate, selectedDate),
       sharedEtfCount: 1,
       sharedSignal: null,
-      excessReturnLabel: "待上線" as const,
+      ...excessFor(event.etfId, event.stockId, event.tradeDate),
     }))
     .filter((position) => position.holdingTradingDays > 0 && position.holdingTradingDays < 20);
 

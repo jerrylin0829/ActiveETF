@@ -99,8 +99,47 @@ describe("today overview radar", () => {
       holdingTradingDays: 3,
       sharedEtfCount: 2,
       sharedSignal: "2 檔 ETF 近期同步建倉",
-      excessReturnLabel: "待上線",
+      excessReturnPct: null,
+      excessReturnNote: "—", // no open_position rows supplied
     });
+  });
+
+  it("joins excess returns from open_position when viewing the as-of date", () => {
+    const positions = buildRadarPositions(
+      [
+        { ...baseEvent, etfId: "A", stockId: "2330", tradeDate: "2026-07-10", changeType: "NEW" },
+        { ...baseEvent, etfId: "B", stockId: "9999", tradeDate: "2026-07-13", changeType: "NEW" },
+      ],
+      tradingDates,
+      "2026-07-14",
+      [
+        { etfId: "A", stockId: "2330", entryDate: "2026-07-10",
+          asOfDate: "2026-07-14", excessReturnPct: 12.334 },
+        { etfId: "B", stockId: "9999", entryDate: "2026-07-13",
+          asOfDate: "2026-07-14", excessReturnPct: null }, // foreign/unpriceable
+      ],
+    );
+
+    expect(positions.find((p) => p.etfId === "A")).toMatchObject({
+      excessReturnPct: 12.334,
+      excessReturnNote: null,
+    });
+    expect(positions.find((p) => p.etfId === "B")).toMatchObject({
+      excessReturnPct: null,
+      excessReturnNote: "不適用",
+    });
+  });
+
+  it("shows a dash instead of stale excess returns on historical dates", () => {
+    const positions = buildRadarPositions(
+      [{ ...baseEvent, etfId: "A", stockId: "2330", tradeDate: "2026-07-10", changeType: "NEW" }],
+      tradingDates,
+      "2026-07-13", // browsing an earlier date than the cache's as-of
+      [{ etfId: "A", stockId: "2330", entryDate: "2026-07-10",
+         asOfDate: "2026-07-14", excessReturnPct: 3.2 }],
+    );
+
+    expect(positions[0]).toMatchObject({ excessReturnPct: null, excessReturnNote: "—" });
   });
 
   it("excludes open NEW positions once they reach 20 trading days", () => {
