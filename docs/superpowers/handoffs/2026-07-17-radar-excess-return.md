@@ -21,7 +21,7 @@ Planner：Claude Code ｜ 日期：2026-07-17 ｜ 目標分支前綴：`codex/`
 「當前狀態」表，每日全表重算（部位數 ≤ 數百，重算最簡單且冪等），可從 `holding_change` + `stock_price` 全期重建（符合資料原則 1）：
 
 ```sql
-create table radar_position (
+create table open_position (
   etf_id            text not null references etf,
   stock_id          text not null,
   entry_date        date not null,            -- NEW event date of the current round
@@ -35,7 +35,7 @@ create table radar_position (
 -- RLS 比照既有表：enable + anonymous read policy
 ```
 
-只存「未平倉且 holding_days < 20」的部位；EXIT 或畢業者在重算時自然消失。
+（2026-07-17 Planner 修訂：表名 `radar_position` → `open_position`，改存**全部未平倉回合**——不再只存 <20 日。理由：第四片 ETF 個別頁需要所有持倉的「持有天數」欄與滿 20 日「長抱」徽章，同一張表餵兩個功能，避免第二套天數計算。雷達的「未滿 20 日」邏輯移到前端查詢條件 `holding_days < 20`。EXIT 者在重算時自然消失；「畢業」不再是資料層概念，只是雷達視圖的篩選邊界。）
 
 ### 3. EXIT、重新 NEW、TRIM 的處理
 
@@ -46,7 +46,7 @@ create table radar_position (
 
 - 交易日序列 = `holdings_snapshot` 的 distinct `trade_date`（與第二片同一慣例）
 - `holding_days` = 序列中落在 `(entry_date, as_of_date]` 的交易日數（entry 當天 = 0）
-- 滿 20（`holding_days >= 20`）= 畢業，不寫入 `radar_position`；「長抱」徽章屬 ETF 個別頁（第四片），本片不做
+- 滿 20（`holding_days >= 20`）= 畢業＝**移出雷達視圖**（資料仍在 `open_position`，前端雷達查詢加 `holding_days < 20`）；「長抱」徽章屬 ETF 個別頁（第四片），本片不做
 - 實作時先檢查 `score_rounds` 的天數計算是否同一口徑，若有現成函式必須重用
 
 ### 5. 海外持股
@@ -61,10 +61,10 @@ create table radar_position (
 
 ## Scope
 
-1. Migration：`radar_position` 表 + RLS（編號接在既有 migration 之後）
+1. Migration：`open_position` 表 + RLS（編號接在既有 migration 之後）
 2. `db.py` / `metrics.py`：重算函式（重用 `build_rounds`、`_window_return`、`load_adj_series`、`load_tri_series`）
 3. pipeline 掛載重算步驟
-4. 前端：把今日總覽雷達的「待上線」欄位換成 `radar_position.excess_return_pct`，`abs ≥ 10%` 標色（紅漲綠跌）、null 顯示「不適用」；數字格式沿用 `+12.33%` 規範（交集表 spec §7）
+4. 前端：把今日總覽雷達的「待上線」欄位換成 `open_position.excess_return_pct`（查詢條件 `holding_days < 20`），`abs ≥ 10%` 標色（紅漲綠跌）、null 顯示「不適用」；數字格式沿用 `+12.33%` 規範（交集表 spec §7）
 5. pytest 整合測試：回合切分邊界（EXIT 後再 NEW、TRIM 不斷回合、無 NEW 事件的存量持股排除）、天數計算、缺價 null、冪等重跑
 
 ## Non-goals
@@ -82,7 +82,7 @@ create table radar_position (
 
 ## Expected Files
 
-- `scraper/migrations/004_radar_position.sql`
+- `scraper/migrations/004_open_position.sql`
 - `scraper/src/activeetf/`（radar 重算，掛進 pipeline）
 - `scraper/tests/test_radar.py`
 - `web/lib/today-overview*.ts`、`web/components/today-overview-dashboard.tsx` 及測試
