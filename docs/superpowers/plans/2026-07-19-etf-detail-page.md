@@ -44,7 +44,7 @@ expect(buildHoldingRows({
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
-Run: `npm test -- web/lib/etf-detail.test.ts`
+Run: `npm test -- lib/etf-detail.test.ts`
 
 Expected: FAIL because `@/lib/etf-detail` does not exist.
 
@@ -58,7 +58,7 @@ Cover current-only membership, previous NEW, 20-day missing date, 20-day absent 
 
 - [ ] **Step 5: Run tests and commit**
 
-Run: `npm test -- web/lib/etf-detail.test.ts`
+Run: `npm test -- lib/etf-detail.test.ts`
 
 Expected: all focused tests PASS.
 
@@ -83,7 +83,7 @@ Build a Supabase query double that records filters, complete order columns, rang
 
 - [ ] **Step 2: Verify RED**
 
-Run: `npm test -- web/lib/etf-detail-data.test.ts`
+Run: `npm test -- lib/etf-detail-data.test.ts`
 
 Expected: FAIL because `fetchEtfDetail()` does not exist.
 
@@ -111,7 +111,7 @@ Add >1,000-row fixtures for snapshots/timeline/history and assert the second pag
 
 - [ ] **Step 6: Run tests and commit**
 
-Run: `npm test -- web/lib/etf-detail-data.test.ts web/lib/etf-detail.test.ts`
+Run: `npm test -- lib/etf-detail-data.test.ts lib/etf-detail.test.ts`
 
 Expected: all focused tests PASS.
 
@@ -137,7 +137,7 @@ Assert return plus 0050 benchmark, realized/open win rates with sample counts, s
 
 - [ ] **Step 2: Verify RED**
 
-Run: `npm test -- web/components/etf-detail/summary-sections.test.tsx`
+Run: `npm test -- components/etf-detail/summary-sections.test.tsx`
 
 - [ ] **Step 3: Implement components**
 
@@ -145,7 +145,7 @@ Use an unframed responsive metric grid; no nested cards. Use Recharts `PieChart`
 
 - [ ] **Step 4: Verify responsive-safe rendering and commit**
 
-Run: `npm test -- web/components/etf-detail/summary-sections.test.tsx`
+Run: `npm test -- components/etf-detail/summary-sections.test.tsx`
 
 Commit: `feat: 新增 ETF 績效與配置區塊`
 
@@ -168,7 +168,7 @@ Assert default weight-desc order, sort toggles, NEW versus numeric versus `—` 
 
 - [ ] **Step 2: Verify RED**
 
-Run: `npm test -- web/components/etf-detail/holdings-explorer.test.tsx`
+Run: `npm test -- components/etf-detail/holdings-explorer.test.tsx`
 
 - [ ] **Step 3: Implement accessible table interaction**
 
@@ -180,7 +180,7 @@ Use Recharts `LineChart` with `connectNulls={false}`, fixed-height responsive me
 
 - [ ] **Step 5: Run tests and commit**
 
-Run: `npm test -- web/components/etf-detail/holdings-explorer.test.tsx web/lib/etf-detail.test.ts`
+Run: `npm test -- components/etf-detail/holdings-explorer.test.tsx lib/etf-detail.test.ts`
 
 Commit: `feat: 新增 ETF 持股探索互動`
 
@@ -208,7 +208,7 @@ Mock `fetchEtfDetail()` and `next/navigation`. Assert unknown ID calls `notFound
 
 - [ ] **Step 2: Verify RED**
 
-Run: `npm test -- web/app/etf/[etfId]/page.test.tsx web/components/rankings-table.test.tsx web/components/cross-holdings-table.test.tsx web/components/today-overview-dashboard.test.tsx`
+Run: `npm test -- 'app/etf/[etfId]/page.test.tsx' components/rankings-table.test.tsx components/cross-holdings-table.test.tsx components/today-overview-dashboard.test.tsx`
 
 - [ ] **Step 3: Implement the page**
 
