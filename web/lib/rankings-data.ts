@@ -8,7 +8,7 @@ import {
   type ScrapeLogEntry,
 } from "@/lib/rankings";
 
-type MetricRecord = {
+export type MetricRecord = {
   etf_id: string;
   trade_date: string;
   ret_1m: number | string | null;
@@ -51,7 +51,7 @@ export type RankingsResult = {
   error: string | null;
 };
 
-const metricSelect = `
+export const rankingMetricSelect = `
   etf_id,
   trade_date,
   ret_1m,
@@ -133,7 +133,7 @@ async function fetchAllMetricRecords(
     const to = from + pageSize - 1;
     const { data, error } = await supabase
       .from("etf_metrics")
-      .select(metricSelect)
+      .select(rankingMetricSelect)
       .order("trade_date", { ascending: false })
       .range(from, to);
 
