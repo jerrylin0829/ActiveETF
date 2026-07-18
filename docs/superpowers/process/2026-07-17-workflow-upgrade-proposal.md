@@ -1,4 +1,6 @@
-# Agent Workflow 升級提案（待 User 裁決）
+# Agent Workflow 升級提案（已採納）
+
+> 2026-07-18 User 裁決：一、二各項**全部採納**，已寫進 `agent-workflow.md`（三層驗證、設計決策清單、DB 操作權責、資料事故 SOP）與 `pr-review-checklist.md`（Spec 一致性、測試資料紀律）。本文件保留為決策紀錄。
 
 提案人：Claude Code（Planner）｜日期：2026-07-17
 依據：輕量版流程實戰 6 個 PR（#3 排行榜、#5 今日總覽、#8 資料層、#9 前端、#10 hotfix、#11 雷達）與兩次資料事故的經驗。CLAUDE.md 約定「實戰 2–3 個 PR 後評估升級」，現已達標。
@@ -8,7 +10,7 @@
 1. **Handoff 品質決定 Generator 成敗**：schema 寫死、決策標「已裁決」、Non-goals 明確的 handoff（雷達片）一次到位；反之會來回。建議：handoff 模板加「設計決策清單（每項標 已裁決/待裁決）」欄位。
 2. **三層驗證**：Generator 自測（TDD）→ 獨立 Evaluator（全新 context，不限定 Codex 或 Claude，重點是**實作者 ≠ 審查者**）→ User merge gate。實作/審查角色可以互換（Codex 寫 Claude 審、或反過來），異質性來自 context 隔離而非特定模型。
 3. **Stacked PR**：base 指向未合併的上游分支（#9→#8），review 乾淨、merge 順序被強制。已寫在 workflow 文件，實戰有效，保留。
-4. **Operator 對帳角色**：兩次事故（pipeline timeout 被砍、NaN 污染）都是 merge 後對帳抓到的。角色必要，保留並強化（見二-3）。
+4. **Operator 對帳角色**：兩次事故（pipeline timeout 被砍、NaN 污染）都是 merge 後對帳抓到的。角色必要，保留並強化（見二-2 資料事故 SOP）。
 
 ## 二、新教訓，建議增補進流程文件
 
@@ -30,6 +32,6 @@
 - `new-adapter` skill：近期無新投信要接，等實際需求。
 - `data-gap` skill：材料已足（07-16 事件是完整案例），建議**下一次**資料缺口處理時邊走邊寫（writing-skills 流程要求實際走過）。
 
-## 裁決請求
+## 裁決結果
 
-同意一、二各項則我把增補寫進 `agent-workflow.md` 與 `pr-review-checklist.md`（一個 docs PR）；有異議的項目單獨說即可。
+2026-07-18 User 裁決：一、二各項**全部採納**。增補已寫入 `agent-workflow.md`、`pr-review-checklist.md`、`generator-handoff.md` 模板，並同步 `CLAUDE.md` 與 workflow design spec（正式版升級紀錄）。Evaluator review 補充修正：DB 寫入權責統一為 User/授權 session（Operator 維持唯讀）、事故 SOP 補破壞性操作安全邊界。

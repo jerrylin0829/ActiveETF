@@ -42,15 +42,15 @@ GitHub Actions（每日 18:30 主場 + 21:30 補抓）
 
 ## Agent 協作流程
 
-本專案採輕量 agent harness：User 負責調度與裁決，Claude Code 預設當 Planner，Codex 可分成 Generator / Evaluator 兩個 session。流程與模板見：
+本專案採 agent harness（2026-07-18 起為正式版）：User 負責調度與裁決，Claude Code 預設當 Planner；Generator / Evaluator 角色不固定綁定模型（Codex 或 Claude 皆可），鐵則是**實作者 ≠ 審查者**的三層驗證（Generator 自測 → 獨立 Evaluator → User merge）。正式 DB 寫入與 merge 前整合測試只由 User 或其明確授權的 session 執行；Operator（資料守門人）唯讀對帳。流程與模板見：
 
-- `docs/superpowers/specs/2026-07-12-agent-workflow-design.md`
+- `docs/superpowers/specs/2026-07-12-agent-workflow-design.md`（含 2026-07-18 正式版升級紀錄）
 - `docs/superpowers/process/agent-workflow.md`
 - `docs/superpowers/process/pr-review-checklist.md`
 - `docs/superpowers/templates/generator-handoff.md`
 - `docs/superpowers/templates/evaluator-review.md`
 
-先用文件化輕量版實戰 2–3 個 PR；若協作規則穩定且重複，再升級正式版流程；正式版再穩定後才做專案 skill。
+正式版穩定後的下一步才是專案 skill（見下方預定清單）。
 
 ## 目前狀態與指令
 
