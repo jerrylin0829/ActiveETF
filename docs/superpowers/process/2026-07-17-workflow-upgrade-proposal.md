@@ -1,4 +1,6 @@
-# Agent Workflow 升級提案（待 User 裁決）
+# Agent Workflow 升級提案（已採納）
+
+> 2026-07-18 User 裁決：一、二各項**全部採納**，已寫進 `agent-workflow.md`（三層驗證、設計決策清單、DB 操作權責、資料事故 SOP）與 `pr-review-checklist.md`（Spec 一致性、測試資料紀律）。本文件保留為決策紀錄。
 
 提案人：Claude Code（Planner）｜日期：2026-07-17
 依據：輕量版流程實戰 6 個 PR（#3 排行榜、#5 今日總覽、#8 資料層、#9 前端、#10 hotfix、#11 雷達）與兩次資料事故的經驗。CLAUDE.md 約定「實戰 2–3 個 PR 後評估升級」，現已達標。
