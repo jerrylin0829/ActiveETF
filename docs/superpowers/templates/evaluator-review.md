@@ -18,7 +18,7 @@
 
 ## Output Format
 
-請以 Codex Evaluator 身分 review。先列 blocker，依嚴重度排序，並附檔案與行號。若沒有 blocker，明確說明。最後列：
+請以 Evaluator 身分 review（Evaluator 可為 Claude 或 Codex，須與 Generator 不同 session）。先列 blocker，依嚴重度排序，並附檔案與行號。若沒有 blocker，明確說明。最後列：
 
 - `Blockers`
 - `Non-blocking Issues`

@@ -10,7 +10,7 @@
 1. **Handoff 品質決定 Generator 成敗**：schema 寫死、決策標「已裁決」、Non-goals 明確的 handoff（雷達片）一次到位；反之會來回。建議：handoff 模板加「設計決策清單（每項標 已裁決/待裁決）」欄位。
 2. **三層驗證**：Generator 自測（TDD）→ 獨立 Evaluator（全新 context，不限定 Codex 或 Claude，重點是**實作者 ≠ 審查者**）→ User merge gate。實作/審查角色可以互換（Codex 寫 Claude 審、或反過來），異質性來自 context 隔離而非特定模型。
 3. **Stacked PR**：base 指向未合併的上游分支（#9→#8），review 乾淨、merge 順序被強制。已寫在 workflow 文件，實戰有效，保留。
-4. **Operator 對帳角色**：兩次事故（pipeline timeout 被砍、NaN 污染）都是 merge 後對帳抓到的。角色必要，保留並強化（見二-3）。
+4. **Operator 對帳角色**：兩次事故（pipeline timeout 被砍、NaN 污染）都是 merge 後對帳抓到的。角色必要，保留並強化（見二-2 資料事故 SOP）。
 
 ## 二、新教訓，建議增補進流程文件
 

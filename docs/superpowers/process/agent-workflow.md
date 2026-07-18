@@ -1,17 +1,18 @@
 # Agent workflow
 
-ActiveETF 使用輕量 agent harness：User 負責調度與裁決，Claude Code 預設當 Planner，Codex 分成 Generator 與 Evaluator 兩個 session。
+ActiveETF 使用正式版 agent harness（2026-07-18 起）：User 負責調度與裁決，Claude Code 預設當 Planner；Generator 與 Evaluator 為兩個獨立 session，**不綁定特定模型**（Claude 或 Codex 皆可），唯一鐵則是實作者 ≠ 審查者。本文件與 `pr-review-checklist.md` 為現行事實來源；設計沿革見 `docs/superpowers/specs/2026-07-12-agent-workflow-design.md`。
 
 ## 標準流程
 
 1. User 指定目標，並要求 Claude Code 以 Planner 身分產出 handoff。
 2. Planner 讀 `CLAUDE.md`、唯一設計 spec、相關 plan/code，填寫 `docs/superpowers/templates/generator-handoff.md`。handoff 必須含**設計決策清單**，每項標「已裁決」或「待裁決」；標「待裁決」者 User 拍板後才可開工（實例：雷達片六個決策全部標記到位，Generator 一次到位無來回）。
 3. User 將 handoff 交給 Generator。
-4. Generator 建立分支、實作、跑驗證、開 PR。
-5. User 將 PR 交給 **獨立 Evaluator**。
-6. Evaluator 依 `docs/superpowers/process/pr-review-checklist.md` 與 `docs/superpowers/templates/evaluator-review.md` review。
-7. 有 blocker 時，User 將 findings 交回 Generator 修正。
-8. Evaluator 二次 review blocker 後，User 決定 merge。
+4. Generator 建立分支、實作、跑本機驗證（含撰寫整合測試，但不對正式 DB 執行）、開 PR。
+5. 若變更涉及正式 DB 或外部依賴，**User 或其明確授權 session 帶真環境執行整合/smoke 測試，並把輸出貼進 PR body**（見「DB 操作權責」）。
+6. User 將 PR 交給 **獨立 Evaluator**。
+7. Evaluator 依 `docs/superpowers/process/pr-review-checklist.md` 與 `docs/superpowers/templates/evaluator-review.md` review。
+8. 有 blocker 時，User 將 findings 交回 Generator 修正。
+9. Evaluator 二次 review blocker 後，User 決定 merge。
 
 **三層驗證**（缺一不可）：Generator 自測（TDD）→ 獨立 Evaluator → User merge gate。核心原則是**實作者 ≠ 審查者**：實作與審查角色可互換（Codex 寫 Claude 審，或反過來；亦可 Claude 主 session 實作、subagent 審查），異質性來自 context 隔離而非特定模型。
 

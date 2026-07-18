@@ -43,4 +43,4 @@
 
 ## Handoff Prompt
 
-請以 Codex Generator 身分依本 handoff 實作。完成後開 PR，PR body 請包含變更摘要、驗證指令、已知風險與後續工作。不得在未驗證時宣稱完成。
+請以 Generator 身分依本 handoff 實作（Generator 可為 Claude 或 Codex，須與後續 Evaluator 不同 session）。完成後開 PR，PR body 請包含變更摘要、驗證指令、已知風險與後續工作。不對正式 DB 執行語句——整合測試撰寫即可，執行由 User 或授權 session 進行。不得在未驗證時宣稱完成。
