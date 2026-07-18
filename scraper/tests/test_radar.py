@@ -157,22 +157,48 @@ def test_same_day_new_with_complete_prices_is_zero_return():
     assert float(row[5]) == 0
 
 
-def test_new_without_entry_day_price_uses_previous_common_day(monkeypatch):
+def test_new_without_cached_entry_history_fetches_previous_common_day(monkeypatch):
     with db.conn() as c:
+        c.execute("delete from holding_change where etf_id = %s", (TEST_ETF,))
+        c.execute(
+            "delete from stock_price where stock_id = %s and trade_date < %s",
+            (TEST_TRI, D5),
+        )
         c.execute(
             "insert into stock_info (stock_id, name, industry, market) "
             "values ('_T97','zeta','水泥工業','twse')"
         )
-        c.cursor().executemany(
+        c.execute(
             "insert into stock_price (stock_id, trade_date, close, adj_close) "
             "values (%s,%s,%s,%s)",
-            [("_T97", D1, 100, 100), ("_T97", D5, 110, 110)],
+            ("_T97", D5, 110, 110),
         )
     db.write_changes("_TC", D2, [Change("_T97", "NEW", 100, 1.0)])
-    monkeypatch.setattr(finmind, "adj_prices", lambda *_args: [])
+
+    adj_calls = []
+    tri_calls = []
+
+    def fake_adj_prices(stock_id, start, end):
+        adj_calls.append((stock_id, start, end))
+        return [
+            {"stock_id": stock_id, "date": str(D1), "raw_close": 100, "close": 100},
+            {"stock_id": stock_id, "date": str(D5), "raw_close": 110, "close": 110},
+        ]
+
+    def fake_total_return_index(start, end):
+        tri_calls.append((start, end))
+        return [
+            {"date": str(D1), "price": 1000},
+            {"date": str(D5), "price": 1050},
+        ]
+
+    monkeypatch.setattr(finmind, "adj_prices", fake_adj_prices)
+    monkeypatch.setattr(finmind, "total_return_index", fake_total_return_index)
 
     metrics.refresh_open_positions(D5, etf_ids=["_TC"])
 
+    assert adj_calls == [("_T97", str(D1), str(D5))]
+    assert tri_calls == [(str(D1), str(D5))]
     row = _rows()[("_T97", D2)]
     assert round(float(row[3]), 2) == 10.0
     assert round(float(row[4]), 2) == 5.0
