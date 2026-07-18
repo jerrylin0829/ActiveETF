@@ -219,31 +219,35 @@ def refresh_open_positions(today: dt.date, etf_ids: list[str] | None = None) -> 
         for r in open_rounds
         if r.stock_id in tw_ids
     }
+    stock_load_plan: dict[str, tuple[dt.date, bool]] = {}
+    for (_etf_id, stock_id, entry), common_start in window_starts.items():
+        start = common_start or history_start
+        force_fetch = common_start != entry
+        previous = stock_load_plan.get(stock_id)
+        if previous is not None:
+            start = min(start, previous[0])
+            force_fetch = force_fetch or previous[1]
+        stock_load_plan[stock_id] = (start, force_fetch)
     tri_start = min(
-        (common_start or history_start for common_start in window_starts.values()),
+        (start for start, _force_fetch in stock_load_plan.values()),
         default=earliest,
     )
     tri = load_tri_series(
         tri_start,
         today,
-        force_fetch=any(
-            common_start != entry
-            for (_etf_id, _stock_id, entry), common_start in window_starts.items()
-        ),
+        force_fetch=any(force_fetch for _start, force_fetch in stock_load_plan.values()),
     )
+    stock_series = {
+        stock_id: load_adj_series(stock_id, start, today, force_fetch=force_fetch)
+        for stock_id, (start, force_fetch) in stock_load_plan.items()
+    }
     rows = []
     for etf_id, open_rounds in open_by_etf.items():
         for r in open_rounds:
             days = len([d for d in dates if r.entry < d <= today])
             sr = br = None
             if r.stock_id in tw_ids:
-                common_start = window_starts[(etf_id, r.stock_id, r.entry)]
-                s = load_adj_series(
-                    r.stock_id,
-                    common_start or history_start,
-                    today,
-                    force_fetch=common_start != r.entry,
-                )
+                s = stock_series[r.stock_id]
                 sr, br = _common_window_returns(s, tri, r.entry, today)
             rows.append((etf_id, r.stock_id, r.entry, today, days,
                          None if sr is None else round(sr * 100, 4),
