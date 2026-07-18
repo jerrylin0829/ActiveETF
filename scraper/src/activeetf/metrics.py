@@ -226,7 +226,10 @@ def refresh_open_positions(today: dt.date, etf_ids: list[str] | None = None) -> 
     tri = load_tri_series(
         tri_start,
         today,
-        force_fetch=any(start is None for start in window_starts.values()),
+        force_fetch=any(
+            common_start != entry
+            for (_etf_id, _stock_id, entry), common_start in window_starts.items()
+        ),
     )
     rows = []
     for etf_id, open_rounds in open_by_etf.items():
@@ -239,7 +242,7 @@ def refresh_open_positions(today: dt.date, etf_ids: list[str] | None = None) -> 
                     r.stock_id,
                     common_start or history_start,
                     today,
-                    force_fetch=common_start is None,
+                    force_fetch=common_start != r.entry,
                 )
                 sr, br = _common_window_returns(s, tri, r.entry, today)
             rows.append((etf_id, r.stock_id, r.entry, today, days,
