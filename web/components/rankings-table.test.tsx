@@ -70,6 +70,10 @@ describe("RankingsTable", () => {
     expect(screen.getByText("0050 +1.80%")).toBeInTheDocument();
     expect(screen.getByText("67%（8/12）")).toBeInTheDocument();
     expect(screen.getByText("樣本不足")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /00980A 主動野村臺灣優選/ })).toHaveAttribute(
+      "href",
+      "/etf/00980A",
+    );
   });
 
   it("renders data-gap warnings even when ranking rows exist", () => {

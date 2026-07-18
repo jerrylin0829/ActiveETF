@@ -79,7 +79,12 @@ function ChangeWall({ events }: { events: ChangeEvent[] }) {
                     <span className="font-medium">{event.stockName}</span>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {event.etfId} {event.etfName}
+                    <Link
+                      href={`/etf/${encodeURIComponent(event.etfId)}`}
+                      className="rounded-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {event.etfId} {event.etfName}
+                    </Link>
                   </div>
                 </div>
                 <div className={cn("font-mono text-sm font-semibold tabular-nums", changeTone(event.changeType))}>
