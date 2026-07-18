@@ -32,6 +32,6 @@
 - `new-adapter` skill：近期無新投信要接，等實際需求。
 - `data-gap` skill：材料已足（07-16 事件是完整案例），建議**下一次**資料缺口處理時邊走邊寫（writing-skills 流程要求實際走過）。
 
-## 裁決請求
+## 裁決結果
 
-同意一、二各項則我把增補寫進 `agent-workflow.md` 與 `pr-review-checklist.md`（一個 docs PR）；有異議的項目單獨說即可。
+2026-07-18 User 裁決：一、二各項**全部採納**。增補已寫入 `agent-workflow.md`、`pr-review-checklist.md`、`generator-handoff.md` 模板，並同步 `CLAUDE.md` 與 workflow design spec（正式版升級紀錄）。Evaluator review 補充修正：DB 寫入權責統一為 User/授權 session（Operator 維持唯讀）、事故 SOP 補破壞性操作安全邊界。

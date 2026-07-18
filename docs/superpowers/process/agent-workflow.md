@@ -25,17 +25,22 @@ ActiveETF 使用輕量 agent harness：User 負責調度與裁決，Claude Code 
 
 ## DB 操作權責
 
-- migration 套用、backfill 執行、正式資料修復**一律由 Orchestrator/Operator 執行**；Generator 只寫檔案（migration SQL、腳本），**禁止對任何資料庫執行語句**。
-- 理由：正式 DB 是共用單點，寫入權責集中才能追責與止血。雷達片已照此執行（Generator 交出 `004_open_position.sql`，由 Orchestrator 套用與初始化）。
+- migration 套用、backfill 執行、正式資料修復**一律由 User（Orchestrator）本人或其明確授權的 agent session 執行**——授權為逐案明示，不得由 agent 自行推定。
+- Generator 只寫檔案（migration SQL、腳本），**禁止對任何資料庫執行語句**；Evaluator 只讀；**Operator 維持唯讀觀測**（見角色規則），發現資料問題轉成 Planner 任務，由授權的執行者修復。
+- **Merge 前的真 DB integration 證據由誰跑**：Generator 寫好整合測試（無 `SUPABASE_DB_URL` 自動 skip），由 User 或其授權 session 帶真環境執行，並把輸出附進 PR body。checklist 的「integration/smoke 證據」即指此步驟。
+- 理由：正式 DB 是共用單點，寫入權責集中才能追責與止血。雷達片已照此執行（Generator 交出 `004_open_position.sql` 與 `test_radar.py`，由 User 授權的 session 套用、初始化並執行整合測試）。
 
 ## 資料事故 SOP
 
-發現正式資料被污染或缺損時，依序：
+發現正式資料被污染或缺損時，依序（執行者 = User 或其授權 session，同「DB 操作權責」）：
 
-1. **止血**：先清除污染資料（例：NaN → null 全庫更新），阻止它繼續傳播到衍生表。
+1. **止血**：先清除污染資料（例：NaN → null 全庫更新），阻止它繼續傳播到衍生表。破壞性操作的安全邊界：
+   - 事前先 SELECT 確認**影響列數與範圍**，與預期不符即停手回報
+   - 已授權的夜間/自主情境可先行止血再回報；未授權情境先取得 User 同意
+   - 條件允許時用 transaction 包覆或先留存受影響列（查詢結果貼進記錄即可，勿另建正式表）
 2. **修根因並以測試鎖住**：找到寫入源頭修掉，補一個會紅的測試防回歸（例：`adj_prices` 過濾 NaN + `test_adj_prices_drops_nan_rows`）。
 3. **誠實留缺口**：修不回的資料保持缺（null），**不得用推定值回填**——除權息期間尤其不可用「未還原價 = 還原價」推定。錯資料比缺資料危險。
-4. **全文記錄**：事件經過寫進 PR body，供 Evaluator 重點審查。
+4. **全文記錄與事後對帳**：事件經過（含止血前後的影響列數）寫進 PR body 供 Evaluator 重點審查；修復後由 Operator 於次日對帳確認無殘留。
 
 ## 分支與 PR
 

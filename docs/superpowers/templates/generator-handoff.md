@@ -4,6 +4,12 @@
 
 <!-- Planner: 用 2-4 句說明這次要完成什麼，以及為什麼現在做。 -->
 
+## 設計決策清單
+
+<!-- 每項設計決策一行，標「✅ 已裁決」或「⚖️ 待裁決」。
+     有任何「⚖️ 待裁決」項時，User 拍板前 Generator 不得開工。
+     實例見 docs/superpowers/handoffs/2026-07-17-radar-excess-return.md。 -->
+
 ## Scope
 
 <!-- 本次必須做的事。 -->
