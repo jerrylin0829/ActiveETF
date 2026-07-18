@@ -121,6 +121,57 @@ def scraped_ok(etf_id: str, d: dt.date) -> bool:
     return row is not None
 
 
+def snapshot_trading_dates(upto: dt.date) -> list[dt.date]:
+    """Trading-day sequence = distinct snapshot dates (same convention as slice 2)."""
+    with conn() as c:
+        rows = c.execute("""select distinct trade_date from holdings_snapshot
+                            where trade_date <= %s order by 1""", (upto,)).fetchall()
+    return [r[0] for r in rows]
+
+
+def latest_common_price_date(
+    stock_id: str,
+    benchmark_id: str,
+    upto: dt.date,
+) -> dt.date | None:
+    """Latest cached adjusted-close date shared by a stock and benchmark."""
+    with conn() as c:
+        row = c.execute(
+            """select max(stock.trade_date)
+               from stock_price stock
+               join stock_price benchmark on benchmark.trade_date = stock.trade_date
+               where stock.stock_id = %s and benchmark.stock_id = %s
+                 and stock.trade_date <= %s
+                 and stock.adj_close is not null
+                 and benchmark.adj_close is not null""",
+            (stock_id, benchmark_id, upto),
+        ).fetchone()
+    return row[0] if row else None
+
+
+def new_exit_events(etf_id: str) -> list[tuple]:
+    """(trade_date, stock_id, change_type) NEW/EXIT only — radar rounds must not
+    treat big ADDs as entries (that rule belongs to picking-score rounds)."""
+    with conn() as c:
+        return [tuple(r) for r in c.execute(
+            """select trade_date, stock_id, change_type from holding_change
+               where etf_id=%s and change_type in ('NEW','EXIT')
+               order by trade_date""", (etf_id,)).fetchall()]
+
+
+def replace_open_positions(etf_ids: list[str], rows: list[tuple]) -> None:
+    """rows: (etf_id, stock_id, entry_date, as_of_date, holding_days,
+    stock_return_pct, bench_return_pct, excess_return_pct). Scoped delete keeps
+    the rebuild idempotent per ETF and lets tests touch only fake ETFs."""
+    with conn() as c, c.transaction():
+        c.execute("delete from open_position where etf_id = any(%s)", (etf_ids,))
+        with c.cursor() as cur:
+            cur.executemany(
+                """insert into open_position (etf_id, stock_id, entry_date, as_of_date,
+                   holding_days, stock_return_pct, bench_return_pct, excess_return_pct)
+                   values (%s,%s,%s,%s,%s,%s,%s,%s)""", rows)
+
+
 def refresh_daily_aggregates(d: dt.date) -> None:
     """Recompute cross_holdings_daily and industry_weight_daily for one date.
     delete + insert…select inside one transaction => idempotent rerun."""

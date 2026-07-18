@@ -55,7 +55,21 @@ const overview: TodayOverviewViewModel = {
       holdingTradingDays: 1,
       sharedEtfCount: 2,
       sharedSignal: "2 檔 ETF 近期同步建倉",
-      excessReturnLabel: "待上線",
+      excessReturnPct: 12.334,
+      excessReturnNote: null,
+    },
+    {
+      etfId: "00988A",
+      etfName: "主動統一全球創新",
+      issuer: "統一",
+      stockId: "NVDA US",
+      stockName: "NVDA US",
+      entryDate: "2026-07-14",
+      holdingTradingDays: 1,
+      sharedEtfCount: 1,
+      sharedSignal: null,
+      excessReturnPct: null,
+      excessReturnNote: "不適用",
     },
   ],
   warnings: [
@@ -84,7 +98,8 @@ describe("TodayOverviewDashboard", () => {
     expect(within(collective).getByText("2 檔 ETF")).toBeInTheDocument();
 
     const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
-    expect(within(radar).getByText("待上線")).toBeInTheDocument();
+    expect(within(radar).getByText("+12.33%")).toBeInTheDocument(); // |excess| >= 10 => colored
+    expect(within(radar).getByText("不適用")).toBeInTheDocument(); // foreign holding
     expect(within(radar).getByText("2 檔 ETF 近期同步建倉")).toBeInTheDocument();
     expect(radar).toHaveClass("min-w-0");
     expect(container.querySelector("main > div")).toHaveClass("grid-cols-[minmax(0,1fr)]");

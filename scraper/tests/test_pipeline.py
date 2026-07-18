@@ -81,10 +81,18 @@ def test_refresh_daily_outputs_caches_holding_closes_before_aggregate(monkeypatc
         lambda today: calls.append(("aggregates", today)),
     )
 
+    monkeypatch.setattr(
+        pipeline.metrics,
+        "refresh_open_positions",
+        lambda today: calls.append(("open_positions", today)),
+        raising=False,
+    )
+
     pipeline.refresh_daily_outputs(D2)
 
     assert calls == [
         ("metrics", D2),
         ("closes", D2),
         ("aggregates", D2),
+        ("open_positions", D2),
     ]

@@ -79,7 +79,13 @@ def timing_win_rate(etf: Series, bench: Series) -> tuple[int, int]:
     return wins, months
 
 
-def load_adj_series(stock_id: str, start: dt.date, end: dt.date) -> Series:
+def load_adj_series(
+    stock_id: str,
+    start: dt.date,
+    end: dt.date,
+    *,
+    force_fetch: bool = False,
+) -> Series:
     """Load cached adjusted closes, fetching and caching stale/missing data."""
     with db.conn() as c:
         rows = c.execute(
@@ -92,7 +98,7 @@ def load_adj_series(stock_id: str, start: dt.date, end: dt.date) -> Series:
     # compute_all 只在交易日收盤後跑（main 有 is_trading_day 閘），所以 end=today
     # 本身就是交易日；快取缺 today 當日價即視為過期須補抓。用 <end 而非 end-3天，
     # 否則週一會把上週五誤判為新鮮而漏抓當日還原價。
-    if not s or max(s) < end:
+    if force_fetch or not s or max(s) < end:
         fetched = finmind.adj_prices(stock_id, str(start), str(end))
         db.upsert_prices(
             [(r["stock_id"], r["date"], r.get("raw_close"), r.get("close"))
@@ -103,7 +109,12 @@ def load_adj_series(stock_id: str, start: dt.date, end: dt.date) -> Series:
     return s
 
 
-def load_tri_series(start: dt.date, end: dt.date) -> Series:
+def load_tri_series(
+    start: dt.date,
+    end: dt.date,
+    *,
+    force_fetch: bool = False,
+) -> Series:
     with db.conn() as c:
         rows = c.execute(
             """select trade_date, adj_close from stock_price
@@ -111,7 +122,7 @@ def load_tri_series(start: dt.date, end: dt.date) -> Series:
             (finmind.TAIEX_TRI, start, end),
         ).fetchall()
     s = {r[0]: float(r[1]) for r in rows}
-    if not s or max(s) < end:   # 同 load_adj_series：缺 end 當日即補抓（見上方說明）
+    if force_fetch or not s or max(s) < end:
         fetched = finmind.total_return_index(str(start), str(end))
         db.upsert_prices(
             [(finmind.TAIEX_TRI, r["date"], None, r["price"]) for r in fetched]
@@ -179,6 +190,69 @@ def _write_metrics(etf_id: str, d: dt.date, row: dict) -> None:
         )
 
 
+def refresh_open_positions(today: dt.date, etf_ids: list[str] | None = None) -> None:
+    """Rebuild open_position: every open NEW-initiated round with its
+    entry->today excess return vs TAIEX_TRI (handoff 2026-07-17).
+
+    Reuses build_rounds by feeding NEW/EXIT events only, so big ADDs never
+    spawn radar rounds. Stocks outside stock_info (foreign) or without prices
+    keep null returns — visible but honestly unpriceable.
+    """
+    if etf_ids is None:
+        with db.conn() as c:
+            etf_ids = [r[0] for r in c.execute("select etf_id from etf").fetchall()]
+    dates = db.snapshot_trading_dates(today)
+    tw_ids = db.known_stock_ids()
+    open_by_etf = {}
+    for etf_id in etf_ids:
+        events = [(d, sid, typ, 0, 0) for d, sid, typ in db.new_exit_events(etf_id)]
+        open_by_etf[etf_id] = [r for r in build_rounds(events)
+                               if r.exit is None and r.entry <= today]
+    earliest = min((r.entry for rounds in open_by_etf.values() for r in rounds),
+                   default=today)
+    history_start = dates[0] if dates else earliest
+    window_starts = {
+        (etf_id, r.stock_id, r.entry): db.latest_common_price_date(
+            r.stock_id, finmind.TAIEX_TRI, r.entry
+        )
+        for etf_id, open_rounds in open_by_etf.items()
+        for r in open_rounds
+        if r.stock_id in tw_ids
+    }
+    tri_start = min(
+        (common_start or history_start for common_start in window_starts.values()),
+        default=earliest,
+    )
+    tri = load_tri_series(
+        tri_start,
+        today,
+        force_fetch=any(
+            common_start != entry
+            for (_etf_id, _stock_id, entry), common_start in window_starts.items()
+        ),
+    )
+    rows = []
+    for etf_id, open_rounds in open_by_etf.items():
+        for r in open_rounds:
+            days = len([d for d in dates if r.entry < d <= today])
+            sr = br = None
+            if r.stock_id in tw_ids:
+                common_start = window_starts[(etf_id, r.stock_id, r.entry)]
+                s = load_adj_series(
+                    r.stock_id,
+                    common_start or history_start,
+                    today,
+                    force_fetch=common_start != r.entry,
+                )
+                sr, br = _common_window_returns(s, tri, r.entry, today)
+            rows.append((etf_id, r.stock_id, r.entry, today, days,
+                         None if sr is None else round(sr * 100, 4),
+                         None if br is None else round(br * 100, 4),
+                         None if sr is None or br is None
+                         else round((sr - br) * 100, 4)))
+    db.replace_open_positions(etf_ids, rows)
+
+
 def build_rounds(events: list[tuple]) -> list[Round]:
     """Build scoring rounds from holding changes."""
     entries_, exits = [], {}
@@ -203,9 +277,30 @@ def build_rounds(events: list[tuple]) -> list[Round]:
 
 def _window_return(s: Series, start: dt.date, end: dt.date) -> float | None:
     a, b = _at_or_before(s, start), _at_or_before(s, end)
-    if a is None or b is None or a[0] == b[0] or a[1] == 0:
+    if a is None or b is None or a[1] == 0:
         return None
     return b[1] / a[1] - 1.0
+
+
+def _common_window_returns(
+    stock: Series,
+    bench: Series,
+    start: dt.date,
+    end: dt.date,
+) -> tuple[float | None, float | None]:
+    common_dates = stock.keys() & bench.keys()
+    starts = [d for d in common_dates if d <= start]
+    ends = [d for d in common_dates if d <= end]
+    if not starts or not ends:
+        return None, None
+    common_start = max(starts)
+    common_end = max(ends)
+    if common_end < common_start:
+        return None, None
+    return (
+        _window_return(stock, common_start, common_end),
+        _window_return(bench, common_start, common_end),
+    )
 
 
 def score_rounds(

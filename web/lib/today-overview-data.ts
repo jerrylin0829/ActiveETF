@@ -48,6 +48,15 @@ type DateRecord = {
   trade_date: string;
 };
 
+type OpenPositionRecord = {
+  etf_id: string;
+  stock_id: string;
+  entry_date: string;
+  as_of_date: string;
+  holding_days: number;
+  excess_return_pct: number | string | null;
+};
+
 const pageSize = 1000;
 const changeSelect = `
   etf_id,
@@ -63,6 +72,12 @@ const radarWindowSize = 20;
 function toNumber(value: number | string): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toNumberOrNull(value: number | string | null): number | null {
+  if (value === null) return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function relatedEtf(value: EtfRelation): { name: string; issuer: string } | null {
@@ -260,6 +275,7 @@ export async function fetchTodayOverview({
     radarChangesResult,
     scrapeFailuresResult,
     etfsResult,
+    openPositionsResult,
   ] = await Promise.all([
     fetchPaged<HoldingChangeRecord>((from, to) =>
       supabase
@@ -304,6 +320,16 @@ export async function fetchTodayOverview({
         .range(from, to),
     ),
     supabase.from("etf").select("etf_id, name"),
+    fetchPaged<OpenPositionRecord>((from, to) =>
+      supabase
+        .from("open_position")
+        .select("etf_id, stock_id, entry_date, as_of_date, holding_days, excess_return_pct")
+        .lt("holding_days", 20)
+        .order("etf_id", { ascending: true })
+        .order("stock_id", { ascending: true })
+        .order("entry_date", { ascending: true })
+        .range(from, to),
+    ),
   ]);
 
   const allChangeRecords = [
@@ -331,6 +357,16 @@ export async function fetchTodayOverview({
       error: failure.error,
     }),
   );
+  const openPositionRows = openPositionsResult.data.map(
+    (record) => ({
+      etfId: record.etf_id,
+      stockId: record.stock_id,
+      entryDate: record.entry_date,
+      asOfDate: record.as_of_date,
+      holdingDays: record.holding_days,
+      excessReturnPct: toNumberOrNull(record.excess_return_pct),
+    }),
+  );
   const errors = [
     dateResult.error,
     tradingDatesResult.error,
@@ -340,6 +376,7 @@ export async function fetchTodayOverview({
     scrapeFailuresResult.error,
     etfsResult.error?.message,
     stockNamesResult.error,
+    openPositionsResult.error,
   ].filter(Boolean);
 
   return {
@@ -353,6 +390,7 @@ export async function fetchTodayOverview({
       radarEvents,
       radarTradingDates,
       selectedDate,
+      openPositionRows,
     ),
     warnings: buildOverviewDataGapWarnings(scrapeFailures),
     error: errors.length > 0 ? errors.join("；") : null,
