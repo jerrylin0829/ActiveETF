@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { PickingDisclosure } from "@/components/picking-disclosure";
 import {
   buildPickingSummary,
   formatNumber,
@@ -80,7 +81,7 @@ export function PerformanceSummary({ metric }: { metric: RankingRow | null }) {
                     {formatReturn(metric[item.field])}
                   </div>
                   <div className="mt-1 font-mono text-xs text-muted-foreground tabular-nums">
-                    {item.benchmark ? `0050 ${formatReturn(benchmark)}` : "無同期基準"}
+                    {item.benchmark ? `0050 ${formatReturn(benchmark)}` : "—"}
                   </div>
                 </div>
               );
@@ -116,6 +117,7 @@ export function PerformanceSummary({ metric }: { metric: RankingRow | null }) {
               </div>
             </div>
           </div>
+          <PickingDisclosure />
         </div>
       )}
     </section>

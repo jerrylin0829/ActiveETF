@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { DataGapAlerts } from "@/components/data-gap-alerts";
+import { PickingDisclosure } from "@/components/picking-disclosure";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -107,7 +108,10 @@ function ReturnCell({ row, column }: { row: RankingRow; column: ReturnColumn }) 
   const benchmarkValue = column.benchmark ? row[column.benchmark] : null;
 
   return (
-    <TableCell className="min-w-28 text-right align-top">
+    <TableCell
+      data-testid={`ranking-${row.etfId}-${column.field}`}
+      className="min-w-28 text-right align-top"
+    >
       <div className={cn("font-mono text-sm font-semibold tabular-nums", returnToneClass(tone))}>
         {formatReturn(row[column.field])}
       </div>
@@ -116,7 +120,7 @@ function ReturnCell({ row, column }: { row: RankingRow; column: ReturnColumn }) 
           0050 {formatReturn(benchmarkValue as number | null)}
         </div>
       ) : (
-        <div className="mt-1 text-xs text-muted-foreground">無同期基準</div>
+        <div className="mt-1 font-mono text-xs text-muted-foreground tabular-nums">—</div>
       )}
     </TableCell>
   );
@@ -304,6 +308,7 @@ export function RankingsTable({ rows, warnings = [], error = null }: RankingsTab
             })}
           </TableBody>
         </Table>
+        <PickingDisclosure />
       </div>
     </div>
   );

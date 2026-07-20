@@ -41,11 +41,20 @@ describe("PerformanceSummary", () => {
     const oneMonth = screen.getByTestId("performance-ret1m");
     expect(within(oneMonth).getByText("+10.00%")).toBeInTheDocument();
     expect(within(oneMonth).getByText("0050 +8.00%")).toBeInTheDocument();
+    const inception = screen.getByTestId("performance-retInception");
+    expect(within(inception).getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText("無同期基準")).not.toBeInTheDocument();
     expect(screen.getAllByText("50%（1/2）")).toHaveLength(2);
     expect(screen.getByText("67%（2/3）")).toBeInTheDocument();
     expect(screen.getAllByText("樣本不足")).toHaveLength(2);
     expect(screen.getByText("8 天")).toBeInTheDocument();
     expect(screen.getByText("6.5%")).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "此為訊號品質指標，未計部位大小，不等於績效貢獻",
+    );
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "日內沖銷不會出現在每日 PCF 快照中，無從計分",
+    );
   });
 
   it("keeps missing metrics visible as an empty state", () => {

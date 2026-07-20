@@ -22,7 +22,12 @@ type QueryExecution = {
   limit: number | null;
 };
 
-class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
+type QueryResult = {
+  data: DataRecord[];
+  error: { message: string } | null;
+};
+
+class QueryBuilder implements PromiseLike<QueryResult> {
   private readonly filters: Filter[] = [];
   private readonly orders: QueryExecution["orders"] = [];
   private selectedRange: [number, number] | null = null;
@@ -32,6 +37,7 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
     private readonly table: string,
     private readonly records: DataRecord[],
     private readonly executions: QueryExecution[],
+    private readonly errorMessage?: string,
   ) {}
 
   select() {
@@ -73,8 +79,8 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
     return this;
   }
 
-  then<TResult1 = { data: DataRecord[]; error: null }, TResult2 = never>(
-    onfulfilled?: ((value: { data: DataRecord[]; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+  then<TResult1 = QueryResult, TResult2 = never>(
+    onfulfilled?: ((value: QueryResult) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
     return Promise.resolve(this.execute()).then(onfulfilled, onrejected);
@@ -88,6 +94,10 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
       range: this.selectedRange,
       limit: this.selectedLimit,
     });
+
+    if (this.errorMessage) {
+      return { data: [], error: { message: this.errorMessage } };
+    }
 
     let rows = this.records.filter((record) =>
       this.filters.every((filter) => {
@@ -194,12 +204,15 @@ function baseDatasets(): Record<string, DataRecord[]> {
   };
 }
 
-function installSupabaseDouble(overrides: Partial<Record<string, DataRecord[]>> = {}) {
+function installSupabaseDouble(
+  overrides: Partial<Record<string, DataRecord[]>> = {},
+  errors: Partial<Record<string, string>> = {},
+) {
   const executions: QueryExecution[] = [];
   const datasets = { ...baseDatasets(), ...overrides };
   createClientMock.mockReturnValue({
     from(table: string) {
-      return new QueryBuilder(table, datasets[table] ?? [], executions);
+      return new QueryBuilder(table, datasets[table] ?? [], executions, errors[table]);
     },
   });
   return executions;
@@ -338,5 +351,67 @@ describe("fetchEtfDetail", () => {
             || filter.column === "stock_id" && filter.kind === "eq",
         )),
     ).toBe(true);
+  });
+
+  it("includes the second page of timeline events under a deterministic order", async () => {
+    const changes = Array.from({ length: 1001 }, (_, index) => ({
+      etf_id: "00981A",
+      trade_date: dates[0],
+      stock_id: `T${String(index).padStart(4, "0")}`,
+      change_type: "ADD",
+      shares_delta: index + 1,
+      weight_delta_pct: 0.1,
+    }));
+    const executions = installSupabaseDouble({ holding_change: changes });
+
+    const result = await fetchEtfDetail("00981A");
+
+    expect(result.found && result.detail.changes).toHaveLength(1001);
+    const secondPage = executions.find(
+      (execution) => execution.table === "holding_change"
+        && execution.range?.[0] === 1000
+        && !execution.filters.some((filter) => filter.column === "stock_id"),
+    );
+    expect(secondPage?.orders.map((order) => order.column)).toEqual(["trade_date", "stock_id"]);
+  });
+
+  it("includes the second page of the selected stock full history", async () => {
+    const selectedHistory = Array.from({ length: 1001 }, (_, index) => ({
+      etf_id: "00981A",
+      trade_date: `2020-01-${String(index).padStart(4, "0")}`,
+      stock_id: "2330",
+      shares: 1_000,
+      weight_pct: index / 100,
+    }));
+    const executions = installSupabaseDouble({
+      holdings_snapshot: [...baseDatasets().holdings_snapshot, ...selectedHistory],
+    });
+
+    const result = await fetchEtfDetail("00981A", "2330");
+
+    expect(result.found && result.detail.weightHistory).toContainEqual({
+      tradeDate: "2020-01-1000",
+      weightPct: 10,
+    });
+    const secondPage = executions.find(
+      (execution) => execution.table === "holdings_snapshot"
+        && execution.range?.[0] === 1000
+        && execution.filters.some(
+          (filter) => filter.column === "stock_id" && filter.value === "2330",
+        ),
+    );
+    expect(secondPage?.orders.map((order) => order.column)).toEqual(["trade_date", "stock_id"]);
+  });
+
+  it("keeps partial detail data and exposes a child query error", async () => {
+    installSupabaseDouble({}, { stock_info: "stock_info unavailable" });
+
+    const result = await fetchEtfDetail("00981A");
+
+    expect(result.found).toBe(true);
+    if (!result.found) return;
+    expect(result.detail.holdings).toHaveLength(2);
+    expect(result.detail.holdings[0].stockName).toBe(result.detail.holdings[0].stockId);
+    expect(result.detail.error).toContain("stock_info unavailable");
   });
 });
