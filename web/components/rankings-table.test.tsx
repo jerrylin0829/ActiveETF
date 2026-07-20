@@ -68,8 +68,21 @@ describe("RankingsTable", () => {
     expect(screen.getByText("00980A")).toBeInTheDocument();
     expect(screen.getByText("+4.20%")).toBeInTheDocument();
     expect(screen.getByText("0050 +1.80%")).toBeInTheDocument();
+    expect(within(screen.getByTestId("ranking-00980A-retInception")).getByText("—"))
+      .toBeInTheDocument();
+    expect(screen.queryByText("無同期基準")).not.toBeInTheDocument();
     expect(screen.getByText("67%（8/12）")).toBeInTheDocument();
     expect(screen.getByText("樣本不足")).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "此為訊號品質指標，未計部位大小，不等於績效貢獻",
+    );
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "日內沖銷不會出現在每日 PCF 快照中，無從計分",
+    );
+    expect(screen.getByRole("link", { name: /00980A 主動野村臺灣優選/ })).toHaveAttribute(
+      "href",
+      "/etf/00980A",
+    );
   });
 
   it("renders data-gap warnings even when ranking rows exist", () => {

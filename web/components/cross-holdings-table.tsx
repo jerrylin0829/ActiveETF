@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -169,7 +170,12 @@ export function CrossHoldingsTable({ rows, details }: CrossHoldingsTableProps) {
                   (details[r.stockId] ?? []).map((d) => (
                     <TableRow key={`${r.stockId}-${d.etfId}`} className="bg-muted/40">
                       <TableCell colSpan={2} className="pl-8 font-mono text-sm">
-                        {d.etfId} {d.etfName}
+                        <Link
+                          href={`/etf/${encodeURIComponent(d.etfId)}`}
+                          className="rounded-sm font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {d.etfId} {d.etfName}
+                        </Link>
                       </TableCell>
                       <TableCell />
                       <TableCell className="tabular-nums">{formatPct(d.weightPct)}</TableCell>

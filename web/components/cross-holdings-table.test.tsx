@@ -77,6 +77,10 @@ describe("CrossHoldingsTable", () => {
     await user.click(screen.getByText(/台積電/));
     expect(screen.getByText(/主動統一台股增長/)).toBeInTheDocument();
     expect(screen.getByText("9.31%")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /00981A 主動統一台股增長/ })).toHaveAttribute(
+      "href",
+      "/etf/00981A",
+    );
   });
 
   it("空資料顯示空狀態", () => {

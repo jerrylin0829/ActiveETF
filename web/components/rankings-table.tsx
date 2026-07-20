@@ -1,9 +1,11 @@
 "use client";
 
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { DataGapAlerts } from "@/components/data-gap-alerts";
+import { PickingDisclosure } from "@/components/picking-disclosure";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -106,7 +108,10 @@ function ReturnCell({ row, column }: { row: RankingRow; column: ReturnColumn }) 
   const benchmarkValue = column.benchmark ? row[column.benchmark] : null;
 
   return (
-    <TableCell className="min-w-28 text-right align-top">
+    <TableCell
+      data-testid={`ranking-${row.etfId}-${column.field}`}
+      className="min-w-28 text-right align-top"
+    >
       <div className={cn("font-mono text-sm font-semibold tabular-nums", returnToneClass(tone))}>
         {formatReturn(row[column.field])}
       </div>
@@ -115,7 +120,7 @@ function ReturnCell({ row, column }: { row: RankingRow; column: ReturnColumn }) 
           0050 {formatReturn(benchmarkValue as number | null)}
         </div>
       ) : (
-        <div className="mt-1 text-xs text-muted-foreground">無同期基準</div>
+        <div className="mt-1 font-mono text-xs text-muted-foreground tabular-nums">—</div>
       )}
     </TableCell>
   );
@@ -259,11 +264,16 @@ export function RankingsTable({ rows, warnings = [], error = null }: RankingsTab
               return (
                 <TableRow key={row.etfId}>
                   <TableCell className="sticky left-0 z-10 bg-card align-top">
-                    <div className="font-mono text-sm font-semibold tabular-nums">{row.etfId}</div>
-                    <div className="mt-1 max-w-48 whitespace-normal text-sm font-medium">
-                      {row.name}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{row.tradeDate}</div>
+                    <Link
+                      href={`/etf/${encodeURIComponent(row.etfId)}`}
+                      className="block rounded-sm outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <div className="font-mono text-sm font-semibold tabular-nums">{row.etfId}</div>
+                      <div className="mt-1 max-w-48 whitespace-normal text-sm font-medium">
+                        {row.name}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">{row.tradeDate}</div>
+                    </Link>
                   </TableCell>
                   <TableCell className="align-top text-sm text-muted-foreground">
                     {row.issuer}
@@ -298,6 +308,7 @@ export function RankingsTable({ rows, warnings = [], error = null }: RankingsTab
             })}
           </TableBody>
         </Table>
+        <PickingDisclosure />
       </div>
     </div>
   );
