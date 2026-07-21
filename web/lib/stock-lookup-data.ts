@@ -169,6 +169,7 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
   const dates = ((dateQuery.data ?? []) as DateRecord[]).map((record) => record.trade_date);
   const latestDate = dates[0] ?? null;
   const eventStart = dates.at(-1) ?? null;
+  const stockInfo = ((stockInfoQuery.data ?? []) as StockInfoRecord[])[0];
   const [holdingResult, changeResult] = latestDate
     ? await Promise.all([
         fetchPaged<SnapshotRecord>((from, to) =>
@@ -209,7 +210,7 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
   ])).sort();
   const [etfResult, positionResult] = await Promise.all([
     fetchEtfs(supabase, allEtfIds),
-    holderEtfIds.length > 0
+    stockInfo && holderEtfIds.length > 0
       ? fetchPaged<OpenPositionRecord>((from, to) =>
           supabase
             .from("open_position")
@@ -253,7 +254,6 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
     sharesDelta: toNumber(record.shares_delta),
     weightDeltaPct: toNumber(record.weight_delta_pct),
   }));
-  const stockInfo = ((stockInfoQuery.data ?? []) as StockInfoRecord[])[0];
   const latestTrend = trend.find((point) => point.tradeDate === latestDate);
   const errors = [
     existenceError?.message,

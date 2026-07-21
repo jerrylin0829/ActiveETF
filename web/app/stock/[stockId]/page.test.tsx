@@ -56,6 +56,17 @@ describe("StockLookupPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("database unavailable");
   });
 
+  it("decodes an overseas stock id before querying Supabase", async () => {
+    fetchStockMock.mockResolvedValue({ found: true, detail: { ...detail, stockId: "NVDA US" } });
+
+    render(await StockLookupPage({
+      params: Promise.resolve({ stockId: "NVDA%20US" }),
+      searchParams: Promise.resolve({}),
+    }));
+
+    expect(fetchStockMock).toHaveBeenCalledWith("NVDA US");
+  });
+
   it("renders identity, current count, data alerts, all sections and the range", async () => {
     fetchStockMock.mockResolvedValue({ found: true, detail });
 

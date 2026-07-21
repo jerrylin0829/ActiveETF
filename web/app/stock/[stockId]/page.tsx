@@ -28,7 +28,7 @@ export default async function StockLookupPage({
     params,
     searchParams ?? emptySearchParams,
   ]);
-  const result = await fetchStockLookup(stockId);
+  const result = await fetchStockLookup(decodeURIComponent(stockId));
 
   if (!result.found) {
     if (!result.error) notFound();

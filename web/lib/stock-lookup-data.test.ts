@@ -217,6 +217,17 @@ describe("fetchStockLookup", () => {
     });
   });
 
+  it("does not expose individual holding-day metrics for an overseas stock", async () => {
+    installSupabaseDouble({ stock_info: [] });
+
+    const result = await fetchStockLookup("2330");
+
+    expect(result.found).toBe(true);
+    if (!result.found) return;
+    expect(result.detail.industry).toBe("未分類");
+    expect(result.detail.holders.every((row) => row.holdingDays === null)).toBe(true);
+  });
+
   it("paginates event history with deterministic primary-key ordering", async () => {
     const changes = Array.from({ length: 1001 }, (_, index) => ({
       etf_id: `ETF${String(index).padStart(4, "0")}`,
