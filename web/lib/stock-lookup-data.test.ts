@@ -159,7 +159,7 @@ describe("fetchStockLookup", () => {
     expect(executions.map((execution) => execution.table)).toEqual(["holdings_snapshot"]);
   });
 
-  it("uses the stock latest trading date and joins all three sections", async () => {
+  it("uses the global latest trading date and joins all three sections", async () => {
     const executions = installSupabaseDouble();
 
     const result = await fetchStockLookup("2330");
@@ -193,7 +193,7 @@ describe("fetchStockLookup", () => {
     ]);
   });
 
-  it("uses the latest stock aggregate date and warns when it trails the global date", async () => {
+  it("shows zero current holders after a normal exit without a stale warning", async () => {
     const datasets = baseDatasets();
     const executions = installSupabaseDouble({
       holdings_snapshot: [
@@ -214,21 +214,18 @@ describe("fetchStockLookup", () => {
 
     expect(result.found).toBe(true);
     if (!result.found) return;
-    expect(result.detail.latestDate).toBe(dates[1]);
-    expect(result.detail.latestEtfCount).toBe(1);
-    expect(result.detail.holders).toHaveLength(1);
+    expect(result.detail.latestDate).toBe(dates[0]);
+    expect(result.detail.latestEtfCount).toBe(0);
+    expect(result.detail.holders).toEqual([]);
     expect(result.detail.events).toContainEqual(expect.objectContaining({
       tradeDate: dates[0],
       etfId: "00980A",
       changeType: "EXIT",
     }));
-    expect(result.detail.warnings).toContainEqual({
-      title: "個股資料尚未更新",
-      description: `2330 最新持股資料為 ${dates[1]}，全站最新交易日為 ${dates[0]}。`,
-    });
+    expect(result.detail.warnings).toEqual([]);
     const holdingQuery = executions.find((execution) =>
       execution.table === "holdings_snapshot"
-      && execution.filters.some((filter) => filter.column === "trade_date" && filter.value === dates[1])
+      && execution.filters.some((filter) => filter.column === "trade_date" && filter.value === dates[0])
     );
     expect(holdingQuery).toBeDefined();
     const eventQuery = executions.find((execution) => execution.table === "holding_change");
@@ -238,7 +235,7 @@ describe("fetchStockLookup", () => {
     ]));
   });
 
-  it("keeps a historical stock page at its latest observed date", async () => {
+  it("keeps a historical stock page but reports the current global-date state", async () => {
     installSupabaseDouble({
       holdings_snapshot: [
         { etf_id: "00980A", trade_date: "2026-06-01", stock_id: "OLD", shares: 1_000, weight_pct: 1 },
@@ -256,11 +253,11 @@ describe("fetchStockLookup", () => {
     expect(result.detail).toMatchObject({
       stockName: "OLD",
       industry: "未分類",
-      latestDate: "2026-06-01",
-      latestEtfCount: 1,
+      latestDate: dates[0],
+      latestEtfCount: 0,
     });
-    expect(result.detail.holders).toHaveLength(1);
-    expect(result.detail.warnings.some((warning) => warning.title === "個股資料尚未更新")).toBe(true);
+    expect(result.detail.holders).toEqual([]);
+    expect(result.detail.warnings).toEqual([]);
   });
 
   it("keeps valid holding-day metrics when overseas metadata is unavailable", async () => {
@@ -274,7 +271,7 @@ describe("fetchStockLookup", () => {
     expect(result.detail.holders.map((row) => row.holdingDays)).toEqual([20, 1]);
   });
 
-  it("warns when an open-position cache trails the stock latest date", async () => {
+  it("warns when an open-position cache trails the page latest date", async () => {
     installSupabaseDouble({
       open_position: [
         { etf_id: "00980A", stock_id: "2330", entry_date: "2026-06-01", as_of_date: dates[1], holding_days: 19 },
@@ -287,7 +284,7 @@ describe("fetchStockLookup", () => {
     if (!result.found) return;
     expect(result.detail.warnings).toContainEqual({
       title: "持有天數快取尚未更新",
-      description: `1 筆 open_position 早於個股最新資料 ${dates[0]}。`,
+      description: `1 筆 open_position 早於頁面最新資料 ${dates[0]}。`,
     });
   });
 

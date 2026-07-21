@@ -34,20 +34,20 @@
 
 1. 建立 Supabase query double，先寫失敗測試：
    - `holdings_snapshot` 查無該代號時回傳 `found: false`，不誤報 404 為讀取錯誤。
-   - 最新日期以該股票最新 `cross_holdings_daily.trade_date` 為準；最新持有表與 header 使用同一天。
+   - 最新日期以全站最新交易日為準；最新持有表與 header 使用同一天，當日無持股即顯示 0 檔。
    - metadata 缺漏時名稱 fallback 為代號、產業為「未分類」。
    - `holdings_snapshot`、`holding_change`、`open_position` 超過 1,000 筆時分頁，排序分別完整包含 `trade_date, etf_id, stock_id` 或對應 PK。
    - 事件只查全站最近 30 個實際快照交易日所涵蓋的日期範圍，不用 30 個日曆日。
    - `stock_info` 與 `etf` 只查實際涉及的 IDs。
    - 任一子查詢錯誤時保留可用部分結果，並回傳可見 error。
-   - 股票最新資料早於全站最新快照時產生資料缺口警示。
+   - `cross_holdings_daily` 沒有零持有 row；走勢可停在最後持有日，不得因此產生資料缺口警示或顯示舊 holder。
 2. 執行 focused test，確認紅燈。
 3. 實作：
    - 先以 `.eq("stock_id", stockId).limit(1)` 判斷歷史存在性。
    - 分頁讀取該股完整 `cross_holdings_daily` 走勢，完整排序 `trade_date, stock_id`。
    - 讀取最新日持股與事件，並只查 holder ETF metadata/open positions。
    - 從 `dashboard_holding_snapshot_dates` 取得最近 30 個交易日，再 bounded 查詢事件。
-   - 將查詢錯誤聚合成 `error`，stale 最新日轉為 `DataGapWarning`。
+   - 將查詢錯誤聚合成 `error`；`open_position.as_of_date` 落後頁面最新日時轉為 `DataGapWarning`。
 4. 執行 focused tests，確認通過。
 5. Commit：`feat: 新增個股反查唯讀查詢`
 
@@ -114,7 +114,7 @@
    - `npm audit --audit-level=moderate`（如仍為既有 advisory，照實記錄，不使用 `--force`）
 3. 啟動 production build 或 dev server，browser smoke：
    - `/stock/2330` 三區塊、雙線、ETF links、console 0 error/warning。
-   - 選一個正式資料中的海外 ID：頁面 200、未分類、持有日 `—`、無文件級橫向溢出。
+   - 選一個正式資料中的海外 ID：頁面 200、未分類；有 `open_position` 時保留持有日，個股報酬不適用；無文件級橫向溢出。
    - 未知 ID 404。
    - 375px 與 1280px 文件寬度、表格容器捲動與圖表非空。
 4. 用正式 Supabase anon 唯讀抽查：
