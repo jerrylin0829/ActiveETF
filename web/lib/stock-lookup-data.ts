@@ -105,9 +105,29 @@ async function fetchEtfs(
   };
 }
 
-function scrapeWarnings(records: ScrapeLogRecord[]): DataGapWarning[] {
+function buildWarnings({
+  stockId,
+  stockLatestDate,
+  globalLatestDate,
+  scrapeLogs,
+  openPositions,
+}: {
+  stockId: string;
+  stockLatestDate: string;
+  globalLatestDate: string | null;
+  scrapeLogs: ScrapeLogRecord[];
+  openPositions: OpenPositionRecord[];
+}): DataGapWarning[] {
+  const warnings: DataGapWarning[] = [];
+  if (globalLatestDate && stockLatestDate < globalLatestDate) {
+    warnings.push({
+      title: "個股資料尚未更新",
+      description: `${stockId} 最新持股資料為 ${stockLatestDate}，全站最新交易日為 ${globalLatestDate}。`,
+    });
+  }
+
   const failures = latestUnresolvedScrapeFailures(
-    records.map((record): ScrapeLogEntry => ({
+    scrapeLogs.map((record): ScrapeLogEntry => ({
       etfId: record.etf_id,
       tradeDate: record.trade_date,
       runAt: record.run_at,
@@ -115,14 +135,24 @@ function scrapeWarnings(records: ScrapeLogRecord[]): DataGapWarning[] {
       error: record.error,
     })),
   );
-  if (failures.length === 0) return [];
-  return [{
-    title: "近期爬蟲失敗",
-    description: failures
-      .slice(0, 5)
-      .map((failure) => `${failure.etfId} ${failure.tradeDate}：${failure.error ?? "未提供錯誤訊息"}`)
-      .join("；"),
-  }];
+  if (failures.length > 0) {
+    warnings.push({
+      title: "近期爬蟲失敗",
+      description: failures
+        .slice(0, 5)
+        .map((failure) => `${failure.etfId} ${failure.tradeDate}：${failure.error ?? "未提供錯誤訊息"}`)
+        .join("；"),
+    });
+  }
+
+  const stalePositions = openPositions.filter((position) => position.as_of_date < stockLatestDate);
+  if (stalePositions.length > 0) {
+    warnings.push({
+      title: "持有天數快取尚未更新",
+      description: `${stalePositions.length} 筆 open_position 早於個股最新資料 ${stockLatestDate}。`,
+    });
+  }
+  return warnings;
 }
 
 export async function fetchStockLookup(stockId: string): Promise<StockLookupResult> {
@@ -138,7 +168,8 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
     return { found: false, error: existenceError?.message ?? null };
   }
 
-  const [dateQuery, trendResult, stockInfoQuery, scrapeQuery] = await Promise.all([
+  const snapshotLatestDate = (existenceData as Pick<SnapshotRecord, "trade_date">[])[0].trade_date;
+  const [globalDateQuery, trendResult, stockInfoQuery, scrapeQuery] = await Promise.all([
     supabase
       .from("dashboard_holding_snapshot_dates")
       .select("trade_date")
@@ -166,42 +197,39 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
       .limit(scrapeLogLimit),
   ]);
 
-  const dates = ((dateQuery.data ?? []) as DateRecord[]).map((record) => record.trade_date);
-  const latestDate = dates[0] ?? null;
-  const eventStart = dates.at(-1) ?? null;
+  const globalDates = ((globalDateQuery.data ?? []) as DateRecord[]).map((record) => record.trade_date);
+  const globalLatestDate = globalDates[0] ?? null;
+  const stockLatestDate = trendResult.data.at(-1)?.trade_date ?? snapshotLatestDate;
+  const eventStart = globalDates.at(-1) ?? null;
+  const eventEnd = globalLatestDate ?? stockLatestDate;
   const stockInfo = ((stockInfoQuery.data ?? []) as StockInfoRecord[])[0];
-  const [holdingResult, changeResult] = latestDate
-    ? await Promise.all([
-        fetchPaged<SnapshotRecord>((from, to) =>
+  const [holdingResult, changeResult] = await Promise.all([
+    fetchPaged<SnapshotRecord>((from, to) =>
+      supabase
+        .from("holdings_snapshot")
+        .select("etf_id, trade_date, stock_id, shares, weight_pct")
+        .eq("trade_date", stockLatestDate)
+        .eq("stock_id", stockId)
+        .order("trade_date", { ascending: true })
+        .order("etf_id", { ascending: true })
+        .order("stock_id", { ascending: true })
+        .range(from, to),
+    ),
+    eventStart
+      ? fetchPaged<ChangeRecord>((from, to) =>
           supabase
-            .from("holdings_snapshot")
-            .select("etf_id, trade_date, stock_id, shares, weight_pct")
-            .eq("trade_date", latestDate)
+            .from("holding_change")
+            .select("etf_id, trade_date, stock_id, change_type, shares_delta, weight_delta_pct")
             .eq("stock_id", stockId)
-            .order("trade_date", { ascending: true })
+            .gte("trade_date", eventStart)
+            .lte("trade_date", eventEnd)
+            .order("trade_date", { ascending: false })
             .order("etf_id", { ascending: true })
             .order("stock_id", { ascending: true })
             .range(from, to),
-        ),
-        eventStart
-          ? fetchPaged<ChangeRecord>((from, to) =>
-              supabase
-                .from("holding_change")
-                .select("etf_id, trade_date, stock_id, change_type, shares_delta, weight_delta_pct")
-                .eq("stock_id", stockId)
-                .gte("trade_date", eventStart)
-                .lte("trade_date", latestDate)
-                .order("trade_date", { ascending: false })
-                .order("etf_id", { ascending: true })
-                .order("stock_id", { ascending: true })
-                .range(from, to),
-            )
-          : Promise.resolve({ data: [] as ChangeRecord[], error: null }),
-      ])
-    : [
-        { data: [] as SnapshotRecord[], error: null },
-        { data: [] as ChangeRecord[], error: null },
-      ];
+        )
+      : Promise.resolve({ data: [] as ChangeRecord[], error: null }),
+  ]);
 
   const holderEtfIds = Array.from(new Set(holdingResult.data.map((record) => record.etf_id))).sort();
   const allEtfIds = Array.from(new Set([
@@ -210,7 +238,7 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
   ])).sort();
   const [etfResult, positionResult] = await Promise.all([
     fetchEtfs(supabase, allEtfIds),
-    stockInfo && holderEtfIds.length > 0
+    holderEtfIds.length > 0
       ? fetchPaged<OpenPositionRecord>((from, to) =>
           supabase
             .from("open_position")
@@ -228,7 +256,7 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
   const etfNames = new Map(etfResult.data.map((record) => [record.etf_id, record.name]));
   const changes = new Map<string, StockChangeType>();
   for (const record of changeResult.data) {
-    if (record.trade_date === latestDate) changes.set(record.etf_id, record.change_type);
+    if (record.trade_date === stockLatestDate) changes.set(record.etf_id, record.change_type);
   }
   const holdings: StockHolderSnapshot[] = holdingResult.data.map((record) => ({
     etfId: record.etf_id,
@@ -254,10 +282,10 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
     sharesDelta: toNumber(record.shares_delta),
     weightDeltaPct: toNumber(record.weight_delta_pct),
   }));
-  const latestTrend = trend.find((point) => point.tradeDate === latestDate);
+  const latestTrend = trend.find((point) => point.tradeDate === stockLatestDate);
   const errors = [
     existenceError?.message,
-    dateQuery.error?.message,
+    globalDateQuery.error?.message,
     trendResult.error,
     stockInfoQuery.error?.message,
     scrapeQuery.error?.message,
@@ -273,12 +301,18 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
       stockId,
       stockName: stockInfo?.name || stockId,
       industry: stockInfo?.industry || "未分類",
-      latestDate,
+      latestDate: stockLatestDate,
       latestEtfCount: latestTrend?.etfCount ?? holdings.length,
       holders: buildStockHolderRows({ holdings, etfNames, changes, openPositions }),
       trend,
       events,
-      warnings: scrapeWarnings((scrapeQuery.data ?? []) as ScrapeLogRecord[]),
+      warnings: buildWarnings({
+        stockId,
+        stockLatestDate,
+        globalLatestDate,
+        scrapeLogs: (scrapeQuery.data ?? []) as ScrapeLogRecord[],
+        openPositions: positionResult.data,
+      }),
       error: errors.length > 0 ? errors.join("；") : null,
     },
   };

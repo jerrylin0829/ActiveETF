@@ -159,7 +159,7 @@ describe("fetchStockLookup", () => {
     expect(executions.map((execution) => execution.table)).toEqual(["holdings_snapshot"]);
   });
 
-  it("uses the global latest trading date and joins all three sections", async () => {
+  it("uses the stock latest trading date and joins all three sections", async () => {
     const executions = installSupabaseDouble();
 
     const result = await fetchStockLookup("2330");
@@ -193,7 +193,52 @@ describe("fetchStockLookup", () => {
     ]);
   });
 
-  it("keeps a historical stock page but shows zero current holders", async () => {
+  it("uses the latest stock aggregate date and warns when it trails the global date", async () => {
+    const datasets = baseDatasets();
+    const executions = installSupabaseDouble({
+      holdings_snapshot: [
+        { etf_id: "00980A", trade_date: dates[1], stock_id: "2330", shares: 10_000, weight_pct: 10 },
+      ],
+      cross_holdings_daily: [
+        { trade_date: dates[2], stock_id: "2330", etf_count: 1, total_weight_pct: 9 },
+        { trade_date: dates[1], stock_id: "2330", etf_count: 1, total_weight_pct: 10 },
+      ],
+      holding_change: [
+        { etf_id: "00980A", trade_date: dates[0], stock_id: "2330", change_type: "EXIT", shares_delta: -10_000, weight_delta_pct: -10 },
+      ],
+      open_position: [],
+      etf: datasets.etf,
+    });
+
+    const result = await fetchStockLookup("2330");
+
+    expect(result.found).toBe(true);
+    if (!result.found) return;
+    expect(result.detail.latestDate).toBe(dates[1]);
+    expect(result.detail.latestEtfCount).toBe(1);
+    expect(result.detail.holders).toHaveLength(1);
+    expect(result.detail.events).toContainEqual(expect.objectContaining({
+      tradeDate: dates[0],
+      etfId: "00980A",
+      changeType: "EXIT",
+    }));
+    expect(result.detail.warnings).toContainEqual({
+      title: "個股資料尚未更新",
+      description: `2330 最新持股資料為 ${dates[1]}，全站最新交易日為 ${dates[0]}。`,
+    });
+    const holdingQuery = executions.find((execution) =>
+      execution.table === "holdings_snapshot"
+      && execution.filters.some((filter) => filter.column === "trade_date" && filter.value === dates[1])
+    );
+    expect(holdingQuery).toBeDefined();
+    const eventQuery = executions.find((execution) => execution.table === "holding_change");
+    expect(eventQuery?.filters).toEqual(expect.arrayContaining([
+      { kind: "gte", column: "trade_date", value: dates[29] },
+      { kind: "lte", column: "trade_date", value: dates[0] },
+    ]));
+  });
+
+  it("keeps a historical stock page at its latest observed date", async () => {
     installSupabaseDouble({
       holdings_snapshot: [
         { etf_id: "00980A", trade_date: "2026-06-01", stock_id: "OLD", shares: 1_000, weight_pct: 1 },
@@ -211,13 +256,14 @@ describe("fetchStockLookup", () => {
     expect(result.detail).toMatchObject({
       stockName: "OLD",
       industry: "未分類",
-      latestDate: dates[0],
-      latestEtfCount: 0,
-      holders: [],
+      latestDate: "2026-06-01",
+      latestEtfCount: 1,
     });
+    expect(result.detail.holders).toHaveLength(1);
+    expect(result.detail.warnings.some((warning) => warning.title === "個股資料尚未更新")).toBe(true);
   });
 
-  it("does not expose individual holding-day metrics for an overseas stock", async () => {
+  it("keeps valid holding-day metrics when overseas metadata is unavailable", async () => {
     installSupabaseDouble({ stock_info: [] });
 
     const result = await fetchStockLookup("2330");
@@ -225,7 +271,24 @@ describe("fetchStockLookup", () => {
     expect(result.found).toBe(true);
     if (!result.found) return;
     expect(result.detail.industry).toBe("未分類");
-    expect(result.detail.holders.every((row) => row.holdingDays === null)).toBe(true);
+    expect(result.detail.holders.map((row) => row.holdingDays)).toEqual([20, 1]);
+  });
+
+  it("warns when an open-position cache trails the stock latest date", async () => {
+    installSupabaseDouble({
+      open_position: [
+        { etf_id: "00980A", stock_id: "2330", entry_date: "2026-06-01", as_of_date: dates[1], holding_days: 19 },
+      ],
+    });
+
+    const result = await fetchStockLookup("2330");
+
+    expect(result.found).toBe(true);
+    if (!result.found) return;
+    expect(result.detail.warnings).toContainEqual({
+      title: "持有天數快取尚未更新",
+      description: `1 筆 open_position 早於個股最新資料 ${dates[0]}。`,
+    });
   });
 
   it("paginates event history with deterministic primary-key ordering", async () => {
@@ -267,7 +330,7 @@ describe("fetchStockLookup", () => {
       holding_days: index,
     }));
     const executions = installSupabaseDouble({
-      cross_holdings_daily: trend,
+      cross_holdings_daily: [...trend, ...baseDatasets().cross_holdings_daily],
       open_position: positions,
     });
 
