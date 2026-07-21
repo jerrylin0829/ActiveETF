@@ -122,4 +122,3 @@
    - 最新持有 ETF 與 `/cross` 同日展開明細一致。
 5. 視 TSX 變更執行 React best-practices 檢查，修正具體問題後重跑必要驗證。
 6. Push `codex/stock-lookup-page`，開 Draft PR（base `main`）；PR body 記錄變更摘要、逐條指令與輸出、兩檔真資料 smoke、已知風險與後續工作，明確說明未寫入正式 Supabase。
-
