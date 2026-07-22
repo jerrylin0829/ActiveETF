@@ -74,13 +74,24 @@ describe("CrossHoldingsTable", () => {
   it("點列展開該股的 ETF 明細", async () => {
     const user = userEvent.setup();
     render(<CrossHoldingsTable rows={rows} details={details} />);
-    await user.click(screen.getByText(/台積電/));
+    await user.click(screen.getAllByTestId("cross-row")[0]);
     expect(screen.getByText(/主動統一台股增長/)).toBeInTheDocument();
     expect(screen.getByText("9.31%")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /00981A 主動統一台股增長/ })).toHaveAttribute(
       "href",
       "/etf/00981A",
     );
+  });
+
+  it("股票名稱連到個股反查頁且不切換展開狀態", async () => {
+    const user = userEvent.setup();
+    render(<CrossHoldingsTable rows={rows} details={details} />);
+
+    const stockLink = screen.getByRole("link", { name: /2330.*台積電/ });
+    expect(stockLink).toHaveAttribute("href", "/stock/2330");
+    stockLink.addEventListener("click", (event) => event.preventDefault());
+    await user.click(stockLink);
+    expect(screen.queryByText(/主動統一台股增長/)).not.toBeInTheDocument();
   });
 
   it("空資料顯示空狀態", () => {

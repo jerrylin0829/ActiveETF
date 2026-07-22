@@ -147,8 +147,15 @@ export function CrossHoldingsTable({ rows, details }: CrossHoldingsTableProps) {
                   className="cursor-pointer"
                   onClick={() => setExpanded(expanded === r.stockId ? null : r.stockId)}
                 >
-                  <TableCell className="font-mono">
-                    {r.stockId} {r.stockName}
+                  <TableCell>
+                    <Link
+                      href={`/stock/${encodeURIComponent(r.stockId)}`}
+                      onClick={(event) => event.stopPropagation()}
+                      className="inline-flex flex-wrap items-baseline gap-x-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="font-mono font-semibold tabular-nums">{r.stockId}</span>
+                      <span className="hover:text-primary">{r.stockName}</span>
+                    </Link>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">{r.industry}</TableCell>
                   <TableCell className="tabular-nums">{r.etfCount}</TableCell>

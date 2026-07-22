@@ -72,12 +72,15 @@ function ChangeWall({ events }: { events: ChangeEvent[] }) {
                   </Badge>
                 </div>
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <Link
+                    href={`/stock/${encodeURIComponent(event.stockId)}`}
+                    className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <span className="font-mono text-sm font-semibold tabular-nums">
                       {event.stockId}
                     </span>
-                    <span className="font-medium">{event.stockName}</span>
-                  </div>
+                    <span className="font-medium hover:text-primary">{event.stockName}</span>
+                  </Link>
                   <div className="mt-1 text-xs text-muted-foreground">
                     <Link
                       href={`/etf/${encodeURIComponent(event.etfId)}`}
@@ -221,8 +224,13 @@ function NewPositionRadar({ overview }: { overview: TodayOverviewViewModel }) {
                     <div className="mt-1 text-xs text-muted-foreground">{position.etfName}</div>
                   </td>
                   <td className="px-3 py-2 align-top">
-                    <div className="font-mono font-semibold tabular-nums">{position.stockId}</div>
-                    <div className="mt-1">{position.stockName}</div>
+                    <Link
+                      href={`/stock/${encodeURIComponent(position.stockId)}`}
+                      className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <div className="font-mono font-semibold tabular-nums">{position.stockId}</div>
+                      <div className="mt-1 hover:text-primary">{position.stockName}</div>
+                    </Link>
                   </td>
                   <td className="px-3 py-2 align-top font-mono tabular-nums">{position.entryDate}</td>
                   <td className="px-3 py-2 text-right align-top font-mono tabular-nums">

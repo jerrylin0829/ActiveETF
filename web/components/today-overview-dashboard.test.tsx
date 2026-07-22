@@ -96,6 +96,10 @@ describe("TodayOverviewDashboard", () => {
       "href",
       "/etf/00980A",
     );
+    expect(screen.getAllByRole("link", { name: /2330.*台積電/ })[0]).toHaveAttribute(
+      "href",
+      "/stock/2330",
+    );
 
     const collective = screen.getByRole("region", { name: "集體動向" });
     expect(within(collective).getByText("台積電")).toBeInTheDocument();
@@ -105,6 +109,10 @@ describe("TodayOverviewDashboard", () => {
     expect(within(radar).getByText("+12.33%")).toBeInTheDocument(); // |excess| >= 10 => colored
     expect(within(radar).getByText("不適用")).toBeInTheDocument(); // foreign holding
     expect(within(radar).getByText("2 檔 ETF 近期同步建倉")).toBeInTheDocument();
+    expect(within(radar).getByRole("link", { name: /NVDA US/ })).toHaveAttribute(
+      "href",
+      "/stock/NVDA%20US",
+    );
     expect(radar).toHaveClass("min-w-0");
     expect(container.querySelector("main > div")).toHaveClass("grid-cols-[minmax(0,1fr)]");
   });
