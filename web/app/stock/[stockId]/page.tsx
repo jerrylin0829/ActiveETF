@@ -7,6 +7,7 @@ import { AggregateTrendChart } from "@/components/stock-lookup/aggregate-trend-c
 import { HoldersTable } from "@/components/stock-lookup/holders-table";
 import { StockEventHistory } from "@/components/stock-lookup/stock-event-history";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { formatStockLabel } from "@/lib/format";
 import { fetchStockLookup } from "@/lib/stock-lookup-data";
 import { normalizeStockLookupRange } from "@/lib/stock-lookup";
 
@@ -56,8 +57,9 @@ export default async function StockLookupPage({
             <div className="min-w-0">
               <p className="text-sm font-medium text-muted-foreground">{detail.industry}</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
-                <span className="font-mono tabular-nums">{detail.stockId}</span>{" "}
-                {detail.stockName}
+                <span className="font-mono tabular-nums">
+                  {formatStockLabel(detail.stockId, detail.stockName)}
+                </span>
               </h1>
             </div>
             <div className="flex flex-col gap-3 lg:items-end">

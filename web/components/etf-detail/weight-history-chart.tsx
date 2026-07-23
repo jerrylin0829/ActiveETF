@@ -11,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { formatPct } from "@/lib/format";
+import { formatPct, formatStockLabel } from "@/lib/format";
 import type { WeightHistoryPoint } from "@/lib/etf-detail";
 
 export function WeightHistoryChart({
@@ -41,7 +41,9 @@ export function WeightHistoryChart({
   }, []);
 
   const nonNullPoints = points.filter((point) => point.weightPct !== null);
-  const title = stockId ? `${stockId} ${stockName ?? stockId}權重歷史` : "持股權重歷史";
+  const title = stockId
+    ? `${formatStockLabel(stockId, stockName)}權重歷史`
+    : "持股權重歷史";
 
   return (
     <section id="weight-history" aria-labelledby="weight-history-title" className="min-w-0 scroll-mt-4 space-y-3">

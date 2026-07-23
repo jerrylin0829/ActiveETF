@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatLots, formatPct, formatSignedPct } from "@/lib/format";
+import { formatLots, formatPct, formatSignedPct, formatStockLabel } from "@/lib/format";
 import {
   sortHoldingRows,
   type EtfHoldingRow,
@@ -159,7 +159,7 @@ export function HoldingsTable({
                     data-selected={selected || undefined}
                     role="link"
                     tabIndex={0}
-                    aria-label={`查看 ${row.stockId} ${row.stockName} 權重歷史`}
+                    aria-label={`查看 ${formatStockLabel(row.stockId, row.stockName)} 權重歷史`}
                     aria-current={selected ? "true" : undefined}
                     className={cn(
                       "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
@@ -169,8 +169,9 @@ export function HoldingsTable({
                     onKeyDown={(event) => handleKeyDown(event, row.stockId)}
                   >
                     <TableCell>
-                      <div className="font-mono text-sm font-semibold tabular-nums">{row.stockId}</div>
-                      <div className="mt-1 text-sm">{row.stockName}</div>
+                      <div className="font-mono text-sm font-semibold tabular-nums">
+                        {formatStockLabel(row.stockId, row.stockName)}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{row.industry}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{formatPct(row.weightPct)}</TableCell>

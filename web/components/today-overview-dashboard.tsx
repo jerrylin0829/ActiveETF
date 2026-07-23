@@ -3,7 +3,7 @@ import { AlertCircle, ArrowDownRight, ArrowUpRight, Radar } from "lucide-react";
 
 import { DataGapAlerts } from "@/components/data-gap-alerts";
 import { DateSelector } from "@/components/date-selector";
-import { formatSignedPct } from "@/lib/format";
+import { formatSignedPct, formatStockLabel } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { SiteNav } from "@/components/site-nav";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -76,10 +76,9 @@ function ChangeWall({ events }: { events: ChangeEvent[] }) {
                     href={`/stock/${encodeURIComponent(event.stockId)}`}
                     className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="font-mono text-sm font-semibold tabular-nums">
-                      {event.stockId}
+                    <span className="font-medium hover:text-primary">
+                      {formatStockLabel(event.stockId, event.stockName)}
                     </span>
-                    <span className="font-medium hover:text-primary">{event.stockName}</span>
                   </Link>
                   <div className="mt-1 text-xs text-muted-foreground">
                     <Link
@@ -137,10 +136,9 @@ function CollectiveList({
               </span>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="font-mono text-sm font-semibold tabular-nums">
-                    {item.stockId}
+                  <span className="font-medium">
+                    {formatStockLabel(item.stockId, item.stockName)}
                   </span>
-                  <span className="font-medium">{item.stockName}</span>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">{item.etfCount} 檔 ETF</div>
               </div>
@@ -228,8 +226,9 @@ function NewPositionRadar({ overview }: { overview: TodayOverviewViewModel }) {
                       href={`/stock/${encodeURIComponent(position.stockId)}`}
                       className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <div className="font-mono font-semibold tabular-nums">{position.stockId}</div>
-                      <div className="mt-1 hover:text-primary">{position.stockName}</div>
+                      <div className="font-mono font-semibold tabular-nums hover:text-primary">
+                        {formatStockLabel(position.stockId, position.stockName)}
+                      </div>
                     </Link>
                   </td>
                   <td className="px-3 py-2 align-top font-mono tabular-nums">{position.entryDate}</td>
