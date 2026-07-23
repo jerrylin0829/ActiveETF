@@ -224,6 +224,35 @@ describe("fetchTodayOverview", () => {
     expect(changeQueries.every((query) => query.orders.map((order) => order.column).join(",") === "trade_date,etf_id,stock_id")).toBe(true);
   });
 
+  it.each([
+    ["week_prev", "2026-07-13", "2026-07-17"],
+    ["month_prev", "2026-06-01", "2026-06-30"],
+  ])("queries %s using its complete previous-period bounds", async (range, start, end) => {
+    const executions = installSupabaseDouble({
+      dashboard_holding_change_dates: [{ trade_date: "2026-07-22" }],
+      dashboard_holding_snapshot_dates: [{ trade_date: "2026-07-22" }],
+    });
+
+    const result = await fetchTodayOverview({ date: "2026-07-22", range });
+
+    expect(result.range).toBe(range);
+    const boundedQuery = executions.find(
+      (execution) =>
+        execution.table === "holding_change" &&
+        execution.filters.some(
+          (filter) =>
+            filter.kind === "gte" &&
+            filter.column === "trade_date" &&
+            filter.value === start,
+        ),
+    );
+    expect(boundedQuery?.filters).toContainEqual({
+      kind: "lte",
+      column: "trade_date",
+      value: end,
+    });
+  });
+
   it("passes cached holding_days through to the latest-day radar", async () => {
     installSupabaseDouble({
       holding_change: [{

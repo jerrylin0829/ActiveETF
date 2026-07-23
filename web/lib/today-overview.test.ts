@@ -6,6 +6,7 @@ import {
   buildRadarPositions,
   formatWeightDelta,
   latestTradingWindow,
+  rangeBounds,
   sortChangeEvents,
   type ChangeEvent,
 } from "@/lib/today-overview";
@@ -249,5 +250,42 @@ describe("formatWeightDelta", () => {
     expect(formatWeightDelta(1.2345)).toBe("+1.23%");
     expect(formatWeightDelta(-0.866)).toBe("-0.87%");
     expect(formatWeightDelta(0)).toBe("+0.00%");
+  });
+});
+
+describe("rangeBounds", () => {
+  it("當日起訖同為選定日期", () => {
+    expect(rangeBounds("2026-07-22", "day")).toEqual({
+      start: "2026-07-22",
+      end: "2026-07-22",
+    });
+  });
+
+  it("本週從週一至選定日期", () => {
+    expect(rangeBounds("2026-07-22", "week")).toEqual({
+      start: "2026-07-20",
+      end: "2026-07-22",
+    });
+  });
+
+  it("上週從上週一至上週五", () => {
+    expect(rangeBounds("2026-07-22", "week_prev")).toEqual({
+      start: "2026-07-13",
+      end: "2026-07-17",
+    });
+  });
+
+  it("本月從月初至選定日期", () => {
+    expect(rangeBounds("2026-07-22", "month")).toEqual({
+      start: "2026-07-01",
+      end: "2026-07-22",
+    });
+  });
+
+  it("上月從上月月初至上月月底", () => {
+    expect(rangeBounds("2026-07-22", "month_prev")).toEqual({
+      start: "2026-06-01",
+      end: "2026-06-30",
+    });
   });
 });
