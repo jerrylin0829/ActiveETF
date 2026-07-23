@@ -4,6 +4,7 @@ import {
   buildCollectiveMovements,
   buildOverviewDataGapWarnings,
   buildRadarPositions,
+  formatWeightDelta,
   latestTradingWindow,
   sortChangeEvents,
   type ChangeEvent,
@@ -239,5 +240,14 @@ describe("today overview data gaps", () => {
         description: "2026-07-14 有 1 檔 ETF 爬蟲失敗：00987A 台新優勢成長（ValidationError: empty holdings）。",
       },
     ]);
+  });
+});
+
+describe("formatWeightDelta", () => {
+  it("以百分比呈現、兩位小數並帶正負號", () => {
+    expect(formatWeightDelta(0.05)).toBe("+0.05%");
+    expect(formatWeightDelta(1.2345)).toBe("+1.23%");
+    expect(formatWeightDelta(-0.866)).toBe("-0.87%");
+    expect(formatWeightDelta(0)).toBe("+0.00%");
   });
 });

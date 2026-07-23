@@ -287,6 +287,6 @@ export function formatSharesDelta(value: number): string {
 }
 
 export function formatWeightDelta(value: number): string {
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(4)}pp`;
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
 }
