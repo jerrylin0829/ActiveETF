@@ -5,7 +5,7 @@ Planner：Claude Code ｜ 日期：2026-07-19 ｜ 目標分支前綴：`codex/`
 ## 設計決策清單
 
 - ✅ 已裁決：`etf_metrics` 新增 `bench_0050_inception numeric` 欄，由 pipeline 計算並寫入
-- ✅ 已裁決：計算重用既有函式 `inception_return()`，套用在 `compute_all()` 已載入的 `bench_0050` series，不新增第二套報酬計算
+- ✅ 已裁決（User 2026-07-23）：0050 起點對齊每檔 ETF 在 `as_of` 日以前的第一個有效還原價日，再重用既有 `inception_return()`；不得把固定載入起點 2025-05-01 當成所有 ETF 的共同起點
 - ✅ 已裁決：backfill 對既有 `etf_metrics` 全表補算（欄位可從既有快取的 `stock_price` 重算，符合資料原則 1）
 
 ## Goal
@@ -15,8 +15,8 @@ Planner：Claude Code ｜ 日期：2026-07-19 ｜ 目標分支前綴：`codex/`
 ## Scope
 
 1. Migration：`etf_metrics` 加一欄 `bench_0050_inception numeric`
-2. `scraper/src/activeetf/metrics.py::compute_all()`：`bench_0050` series 已在函式開頭載入，新增一行 `"bench_0050_inception": inception_return(bench_0050, today)`，寫進 `row` dict（沿用既有 `_write_metrics` 寫入路徑）
-3. Backfill：對 `etf_metrics` 既有列補算此欄（可用簡單腳本：對每個有記錄的 `(etf_id, trade_date)` 重跑 `inception_return(bench_0050, trade_date)`，或直接重跑一次 `compute_all` 覆蓋最新一列——舊歷史列若無 backfill 需求可留空，由 User 裁決 backfill 深度）
+2. `scraper/src/activeetf/metrics.py::compute_all()`：`bench_0050` series 已在函式開頭載入；先依 ETF series 的第一個有效日期裁切 benchmark，再以 `inception_return()` 計算並寫入 `"bench_0050_inception"`（沿用既有 `_write_metrics` 寫入路徑）
+3. Backfill：對 `etf_metrics` 既有全歷史列補算此欄；每個 `(etf_id, trade_date)` 均依該 ETF 當時第一個有效還原價日對齊 0050，僅使用 `stock_price` 既有快取
 4. 前端：`web/lib/rankings.ts` 的 `RankingRow` 型別加 `bench00501nception`（或依現有命名慣例）欄位；`web/components/etf-detail/performance-summary.tsx` 與 `web/components/rankings-table.tsx` 把「上市以來」列的 `benchmark: null` 改為指向新欄位；欄位為 null 時仍顯示 `—`（歷史缺 backfill 的列）
 
 ## Non-goals
@@ -52,7 +52,7 @@ Planner：Claude Code ｜ 日期：2026-07-19 ｜ 目標分支前綴：`codex/`
 
 ## Risks
 
-- backfill 深度是唯一待 User 裁決的小事項：全歷史重算 vs 僅最新列。建議最新列即可（歷史列本來就不是使用者常看的日期），Generator 開工前若對此有疑慮應在 PR body 註明選擇與理由，不需回頭等裁決卡住進度
+- 全歷史 backfill 會更新所有既有 `etf_metrics` 列；缺 ETF 或 0050 還原價者保持 `null` 並在腳本輸出計數，不以錯誤價格推定補值
 
 ## Handoff Prompt
 
