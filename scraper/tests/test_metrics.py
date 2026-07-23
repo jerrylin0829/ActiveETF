@@ -53,6 +53,79 @@ def test_benchmark_inception_return_aligns_to_etf_first_price():
     ) == pytest.approx(0.1)
 
 
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), float("-inf")])
+def test_benchmark_inception_return_ignores_leading_nonfinite_reference(invalid):
+    d1 = dt.date(2026, 7, 1)
+    d2 = dt.date(2026, 7, 2)
+    d3 = dt.date(2026, 7, 3)
+    benchmark = {d1: 100.0, d2: 110.0, d3: 121.0}
+    reference = {d1: invalid, d2: 10.0, d3: 11.0}
+
+    assert metrics.benchmark_inception_return(
+        benchmark, reference, d3
+    ) == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {},
+        {
+            dt.date(2026, 7, 1): float("nan"),
+            dt.date(2026, 7, 2): float("inf"),
+        },
+    ],
+)
+def test_benchmark_inception_return_requires_finite_reference(reference):
+    benchmark = {
+        dt.date(2026, 7, 1): 100.0,
+        dt.date(2026, 7, 2): 110.0,
+    }
+
+    assert metrics.benchmark_inception_return(
+        benchmark, reference, dt.date(2026, 7, 2)
+    ) is None
+
+
+def test_benchmark_inception_return_ignores_nonfinite_benchmark_prices():
+    d1 = dt.date(2026, 7, 1)
+    d2 = dt.date(2026, 7, 2)
+    d3 = dt.date(2026, 7, 3)
+    d4 = dt.date(2026, 7, 4)
+    benchmark = {
+        d1: float("nan"),
+        d2: 100.0,
+        d3: float("inf"),
+        d4: 110.0,
+    }
+    reference = {d1: 10.0, d4: 11.0}
+
+    assert metrics.benchmark_inception_return(
+        benchmark, reference, d4
+    ) == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize(
+    "benchmark",
+    [
+        {},
+        {
+            dt.date(2026, 7, 1): float("nan"),
+            dt.date(2026, 7, 2): float("-inf"),
+        },
+    ],
+)
+def test_benchmark_inception_return_requires_finite_benchmark(benchmark):
+    reference = {
+        dt.date(2026, 7, 1): 10.0,
+        dt.date(2026, 7, 2): 11.0,
+    }
+
+    assert metrics.benchmark_inception_return(
+        benchmark, reference, dt.date(2026, 7, 2)
+    ) is None
+
+
 def test_compute_all_writes_aligned_benchmark_inception(monkeypatch):
     today = dt.date(2026, 7, 2)
     bench = {
