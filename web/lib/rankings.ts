@@ -45,6 +45,7 @@ export type RankingRow = {
   bench00503m: number | null;
   bench00506m: number | null;
   bench00501y: number | null;
+  bench0050Inception: number | null;
   timingWins: number;
   timingMonths: number;
   pickingRealizedWins: number;
@@ -60,6 +61,7 @@ const returnBenchmarks: Partial<Record<ReturnField, keyof RankingRow>> = {
   ret3m: "bench00503m",
   ret6m: "bench00506m",
   ret1y: "bench00501y",
+  retInception: "bench0050Inception",
 };
 
 export function formatReturn(value: number | null): string {

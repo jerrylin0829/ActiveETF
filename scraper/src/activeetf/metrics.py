@@ -4,6 +4,7 @@ Pure functions accept {date: adj_close} dictionaries. compute_all assembles
 database and FinMind data, then writes etf_metrics.
 """
 import datetime as dt
+import math
 from dataclasses import dataclass
 
 from activeetf import db, finmind
@@ -49,6 +50,28 @@ def inception_return(s: Series, asof: dt.date) -> float | None:
         return None
     first = s[min(s)]
     return end[1] / first - 1.0 if first else None
+
+
+def benchmark_inception_return(
+    benchmark: Series,
+    reference: Series,
+    asof: dt.date,
+) -> float | None:
+    """Benchmark return aligned to the reference series' first valid price."""
+    reference_dates = [
+        d
+        for d, value in reference.items()
+        if d <= asof and math.isfinite(value)
+    ]
+    if not reference_dates:
+        return None
+    start = min(reference_dates)
+    aligned = {
+        d: value
+        for d, value in benchmark.items()
+        if start <= d <= asof and math.isfinite(value)
+    }
+    return inception_return(aligned, asof)
 
 
 def _month_ends(s: Series) -> list[dt.date]:
@@ -169,6 +192,9 @@ def compute_all(today: dt.date) -> None:
             "bench_0050_3m": trailing_return(bench_0050, today, 3),
             "bench_0050_6m": trailing_return(bench_0050, today, 6),
             "bench_0050_1y": trailing_return(bench_0050, today, 12),
+            "bench_0050_inception": benchmark_inception_return(
+                bench_0050, etf_s, today
+            ),
             "timing_wins": wins,
             "timing_months": months,
             **pick,

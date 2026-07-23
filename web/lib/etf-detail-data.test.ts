@@ -174,6 +174,7 @@ function baseDatasets(): Record<string, DataRecord[]> {
       bench_0050_3m: null,
       bench_0050_6m: null,
       bench_0050_1y: null,
+      bench_0050_inception: 0.09,
       timing_wins: 1,
       timing_months: 2,
       picking_realized_wins: 1,
@@ -247,6 +248,7 @@ describe("fetchEtfDetail", () => {
       warnings: [],
     });
     expect(result.detail.holdings).toHaveLength(2);
+    expect(result.detail.metric?.bench0050Inception).toBe(0.09);
     expect(result.detail.holdings.find((row) => row.stockId === "2330")).toMatchObject({
       previousChange: "NEW",
       twentyDayChange: 8,

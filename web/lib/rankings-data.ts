@@ -20,6 +20,7 @@ export type MetricRecord = {
   bench_0050_3m: number | string | null;
   bench_0050_6m: number | string | null;
   bench_0050_1y: number | string | null;
+  bench_0050_inception: number | string | null;
   timing_wins: number | null;
   timing_months: number | null;
   picking_realized_wins: number | null;
@@ -63,6 +64,7 @@ export const rankingMetricSelect = `
   bench_0050_3m,
   bench_0050_6m,
   bench_0050_1y,
+  bench_0050_inception,
   timing_wins,
   timing_months,
   picking_realized_wins,
@@ -111,6 +113,7 @@ export function mapMetricRecord(record: MetricRecord): RankingRow {
     bench00503m: toNumber(record.bench_0050_3m),
     bench00506m: toNumber(record.bench_0050_6m),
     bench00501y: toNumber(record.bench_0050_1y),
+    bench0050Inception: toNumber(record.bench_0050_inception),
     timingWins: record.timing_wins ?? 0,
     timingMonths: record.timing_months ?? 0,
     pickingRealizedWins: record.picking_realized_wins ?? 0,

@@ -20,6 +20,7 @@ const metric: RankingRow = {
   bench00503m: null,
   bench00506m: null,
   bench00501y: null,
+  bench0050Inception: 0.09,
   timingWins: 1,
   timingMonths: 2,
   pickingRealizedWins: 1,
@@ -42,7 +43,7 @@ describe("PerformanceSummary", () => {
     expect(within(oneMonth).getByText("+10.00%")).toBeInTheDocument();
     expect(within(oneMonth).getByText("0050 +8.00%")).toBeInTheDocument();
     const inception = screen.getByTestId("performance-retInception");
-    expect(within(inception).getByText("—")).toBeInTheDocument();
+    expect(within(inception).getByText("0050 +9.00%")).toBeInTheDocument();
     expect(screen.queryByText("無同期基準")).not.toBeInTheDocument();
     expect(screen.getAllByText("50%（1/2）")).toHaveLength(2);
     expect(screen.getByText("67%（2/3）")).toBeInTheDocument();

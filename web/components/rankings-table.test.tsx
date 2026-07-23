@@ -20,6 +20,7 @@ const rows: RankingRow[] = [
     bench00503m: 0.031,
     bench00506m: null,
     bench00501y: null,
+    bench0050Inception: 0.05,
     timingWins: 8,
     timingMonths: 12,
     pickingRealizedWins: 6,
@@ -43,6 +44,7 @@ const rows: RankingRow[] = [
     bench00503m: 0.031,
     bench00506m: null,
     bench00501y: null,
+    bench0050Inception: 0.03,
     timingWins: 2,
     timingMonths: 6,
     pickingRealizedWins: 3,
@@ -68,7 +70,9 @@ describe("RankingsTable", () => {
     expect(screen.getByText("00980A")).toBeInTheDocument();
     expect(screen.getByText("+4.20%")).toBeInTheDocument();
     expect(screen.getByText("0050 +1.80%")).toBeInTheDocument();
-    expect(within(screen.getByTestId("ranking-00980A-retInception")).getByText("—"))
+    expect(
+      within(screen.getByTestId("ranking-00980A-retInception")).getByText("0050 +5.00%"),
+    )
       .toBeInTheDocument();
     expect(screen.queryByText("無同期基準")).not.toBeInTheDocument();
     expect(screen.getByText("67%（8/12）")).toBeInTheDocument();
