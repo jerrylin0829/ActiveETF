@@ -17,7 +17,7 @@ Planner：Claude Code ｜ 日期：2026-07-19 ｜ 目標分支前綴：`codex/`
 1. Migration：`etf_metrics` 加一欄 `bench_0050_inception numeric`
 2. `scraper/src/activeetf/metrics.py::compute_all()`：`bench_0050` series 已在函式開頭載入；先依 ETF series 的第一個有效日期裁切 benchmark，再以 `inception_return()` 計算並寫入 `"bench_0050_inception"`（沿用既有 `_write_metrics` 寫入路徑）
 3. Backfill：對 `etf_metrics` 既有全歷史列補算此欄；每個 `(etf_id, trade_date)` 均依該 ETF 當時第一個有效還原價日對齊 0050，僅使用 `stock_price` 既有快取
-4. 前端：`web/lib/rankings.ts` 的 `RankingRow` 型別加 `bench00501nception`（或依現有命名慣例）欄位；`web/components/etf-detail/performance-summary.tsx` 與 `web/components/rankings-table.tsx` 把「上市以來」列的 `benchmark: null` 改為指向新欄位；欄位為 null 時仍顯示 `—`（歷史缺 backfill 的列）
+4. 前端：`web/lib/rankings.ts` 的 `RankingRow` 型別加 `bench0050Inception` 欄位；`web/components/etf-detail/performance-summary.tsx` 與 `web/components/rankings-table.tsx` 把「上市以來」列的 `benchmark: null` 改為指向新欄位；欄位為 null 時仍顯示 `—`（歷史缺 backfill 的列）
 
 ## Non-goals
 

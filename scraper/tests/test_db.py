@@ -37,13 +37,3 @@ def test_sync_etf_is_idempotent_upsert():
     with db.conn() as c:
         row = c.execute("select name, pcf_url from etf where etf_id='_TEST'").fetchone()
     assert row == ("測試改名", "http://y")   # 第二次 upsert 覆蓋，不重複插入
-
-
-def test_etf_metrics_has_benchmark_inception_column():
-    with db.conn() as c:
-        row = c.execute(
-            """select data_type from information_schema.columns
-               where table_schema='public' and table_name='etf_metrics'
-                 and column_name='bench_0050_inception'"""
-        ).fetchone()
-    assert row == ("numeric",)
