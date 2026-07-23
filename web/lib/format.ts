@@ -23,3 +23,11 @@ export function formatLots(shares: number): string {
 export function stockMarket(stockId: string): "tw" | "overseas" {
   return / [A-Z]{2}$/.test(stockId) ? "overseas" : "tw";
 }
+
+// 海外持股缺少 stock_info 名稱時，名稱會 fallback 成代號；此時只顯示一次。
+export function formatStockLabel(
+  stockId: string,
+  stockName: string | null | undefined,
+): string {
+  return !stockName || stockName === stockId ? stockId : `${stockId} ${stockName}`;
+}

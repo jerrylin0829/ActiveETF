@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatLots, formatPct, formatSignedPct, formatYi, stockMarket } from "@/lib/format";
+import {
+  formatLots,
+  formatPct,
+  formatSignedPct,
+  formatStockLabel,
+  formatYi,
+  stockMarket,
+} from "@/lib/format";
 
 describe("format", () => {
   it("權重以 % 呈現、最多兩位小數", () => {
@@ -36,5 +43,21 @@ describe("stockMarket", () => {
 
   it("無空格後綴的英文 ticker 仍視為 tw", () => {
     expect(stockMarket("HUBS")).toBe("tw");
+  });
+});
+
+describe("formatStockLabel", () => {
+  it("有中文名顯示代號與名稱", () => {
+    expect(formatStockLabel("2330", "台積電")).toBe("2330 台積電");
+  });
+
+  it("名稱等於海外代號時只顯示一次", () => {
+    expect(formatStockLabel("MRVL US", "MRVL US")).toBe("MRVL US");
+    expect(formatStockLabel("00660 KS", "00660 KS")).toBe("00660 KS");
+  });
+
+  it("名稱為空時只顯示代號", () => {
+    expect(formatStockLabel("AAPL US", "")).toBe("AAPL US");
+    expect(formatStockLabel("AAPL US", null)).toBe("AAPL US");
   });
 });
