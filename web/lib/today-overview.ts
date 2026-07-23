@@ -1,3 +1,4 @@
+import { stockMarket } from "@/lib/format";
 import type { DataGapWarning } from "@/lib/rankings";
 
 export type ChangeType = "NEW" | "ADD" | "TRIM" | "EXIT";
@@ -110,6 +111,33 @@ export function sortChangeEvents(events: ChangeEvent[]): ChangeEvent[] {
 
     return `${a.etfId}:${a.stockId}`.localeCompare(`${b.etfId}:${b.stockId}`);
   });
+}
+
+export type ChangeWallTab = "build_exit" | "add_trim";
+export type MarketFilter = "tw" | "overseas";
+
+const tabChangeTypes: Record<ChangeWallTab, ChangeType[]> = {
+  build_exit: ["NEW", "EXIT"],
+  add_trim: ["ADD", "TRIM"],
+};
+
+export function filterChangeWall(
+  events: ChangeEvent[],
+  tab: ChangeWallTab,
+  market: MarketFilter,
+): ChangeEvent[] {
+  return events
+    .filter(
+      (event) =>
+        tabChangeTypes[tab].includes(event.changeType) &&
+        stockMarket(event.stockId) === market,
+    )
+    .sort((a, b) => {
+      const weightDiff = Math.abs(b.weightDeltaPct) - Math.abs(a.weightDeltaPct);
+      return weightDiff !== 0
+        ? weightDiff
+        : `${a.etfId}:${a.stockId}`.localeCompare(`${b.etfId}:${b.stockId}`);
+    });
 }
 
 function roundWeight(value: number): number {

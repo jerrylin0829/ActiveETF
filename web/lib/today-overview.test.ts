@@ -4,6 +4,7 @@ import {
   buildCollectiveMovements,
   buildOverviewDataGapWarnings,
   buildRadarPositions,
+  filterChangeWall,
   formatWeightDelta,
   latestTradingWindow,
   rangeBounds,
@@ -287,5 +288,37 @@ describe("rangeBounds", () => {
       start: "2026-06-01",
       end: "2026-06-30",
     });
+  });
+});
+
+describe("filterChangeWall", () => {
+  const event = (overrides: Partial<ChangeEvent>): ChangeEvent => ({
+    ...baseEvent,
+    ...overrides,
+  });
+  const events = [
+    event({ stockId: "2330", changeType: "NEW", weightDeltaPct: 0.5 }),
+    event({ stockId: "2454", changeType: "EXIT", weightDeltaPct: -1.2 }),
+    event({ stockId: "2317", changeType: "ADD", weightDeltaPct: 0.3 }),
+    event({ stockId: "MRVL US", changeType: "NEW", weightDeltaPct: 0.8 }),
+    event({ stockId: "2308", changeType: "TRIM", weightDeltaPct: -0.1 }),
+  ];
+
+  it("建倉出清與台股只留下 NEW/EXIT 並依權重幅度排序", () => {
+    expect(
+      filterChangeWall(events, "build_exit", "tw").map((item) => item.stockId),
+    ).toEqual(["2454", "2330"]);
+  });
+
+  it("建倉出清與海外只留下海外事件", () => {
+    expect(
+      filterChangeWall(events, "build_exit", "overseas").map((item) => item.stockId),
+    ).toEqual(["MRVL US"]);
+  });
+
+  it("加減碼與台股只留下 ADD/TRIM 並依權重幅度排序", () => {
+    expect(
+      filterChangeWall(events, "add_trim", "tw").map((item) => item.stockId),
+    ).toEqual(["2317", "2308"]);
   });
 });
