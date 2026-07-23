@@ -29,6 +29,7 @@ const baseRow: RankingRow = {
   bench00503m: null,
   bench00506m: null,
   bench00501y: null,
+  bench0050Inception: 0.05,
   timingWins: 8,
   timingMonths: 12,
   pickingRealizedWins: 6,
@@ -104,6 +105,12 @@ describe("ranking row shaping", () => {
     expect(getReturnTone({ ...baseRow, ret1m: 0.01, bench00501m: 0.02 }, "ret1m")).toBe(
       "neutral",
     );
+    expect(
+      getReturnTone(
+        { ...baseRow, retInception: 0.08, bench0050Inception: 0.05 },
+        "retInception",
+      ),
+    ).toBe("beat-positive");
   });
 
   it("finds the max trade date independent of ETF-id sorting", () => {

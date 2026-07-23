@@ -21,7 +21,7 @@ const returnItems: Array<{
   { field: "ret3m", benchmark: "bench00503m", label: "3 個月" },
   { field: "ret6m", benchmark: "bench00506m", label: "6 個月" },
   { field: "ret1y", benchmark: "bench00501y", label: "1 年" },
-  { field: "retInception", benchmark: null, label: "上市以來" },
+  { field: "retInception", benchmark: "bench0050Inception", label: "上市以來" },
 ];
 
 function returnToneClass(row: RankingRow, field: ReturnField): string {

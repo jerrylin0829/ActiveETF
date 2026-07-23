@@ -52,7 +52,12 @@ const returnColumns: ReturnColumn[] = [
   { field: "ret3m", benchmark: "bench00503m", label: "3個月", aria: "3個月報酬排序" },
   { field: "ret6m", benchmark: "bench00506m", label: "6個月", aria: "6個月報酬排序" },
   { field: "ret1y", benchmark: "bench00501y", label: "1年", aria: "1年報酬排序" },
-  { field: "retInception", benchmark: null, label: "上市以來", aria: "上市以來報酬排序" },
+  {
+    field: "retInception",
+    benchmark: "bench0050Inception",
+    label: "上市以來",
+    aria: "上市以來報酬排序",
+  },
 ];
 
 function SortButton({
