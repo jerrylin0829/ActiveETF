@@ -125,4 +125,19 @@ describe("TodayOverviewDashboard", () => {
       /^NVDA US$/,
     );
   });
+
+  it("上方顯示最新資料更新日期", () => {
+    render(<TodayOverviewDashboard overview={overview} />);
+
+    expect(screen.getByText("資料更新至 2026-07-14")).toBeInTheDocument();
+  });
+
+  it("期間切換連結不重置頁面捲動位置", () => {
+    render(<TodayOverviewDashboard overview={overview} />);
+
+    expect(screen.getByTestId("range-link-week")).toHaveAttribute(
+      "data-scroll",
+      "false",
+    );
+  });
 });

@@ -80,11 +80,14 @@ function CollectiveMovements({ overview }: { overview: TodayOverviewViewModel })
           <h2 className="text-xl font-semibold">集體動向</h2>
           <p className="mt-1 text-sm text-muted-foreground">依 ETF 檔數排序，再比合計權重變化。</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {overview.rangeOptions.map((option) => (
             <Link
               key={option.value}
               href={option.href}
+              scroll={false}
+              data-testid={`range-link-${option.value}`}
+              data-scroll="false"
               className={cn(
                 "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
                 option.active
@@ -204,6 +207,11 @@ export function TodayOverviewDashboard({ overview }: { overview: TodayOverviewVi
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
                 看今天誰買進、誰出清，以及哪些個股被多檔主動式 ETF 同步調整。
               </p>
+              {overview.availableDates[0] ? (
+                <p className="mt-2 font-mono text-xs text-muted-foreground tabular-nums">
+                  資料更新至 {overview.availableDates[0]}
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <DateSelector
