@@ -21,7 +21,7 @@ import {
   type SortKey,
   type SortState,
 } from "@/lib/cross-holdings";
-import { formatLots, formatPct, formatYi } from "@/lib/format";
+import { formatLots, formatPct, formatStockLabel, formatYi } from "@/lib/format";
 
 type CrossHoldingsTableProps = {
   rows: CrossRow[];
@@ -153,8 +153,9 @@ export function CrossHoldingsTable({ rows, details }: CrossHoldingsTableProps) {
                       onClick={(event) => event.stopPropagation()}
                       className="inline-flex flex-wrap items-baseline gap-x-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span className="font-mono font-semibold tabular-nums">{r.stockId}</span>
-                      <span className="hover:text-primary">{r.stockName}</span>
+                      <span className="font-mono font-semibold tabular-nums hover:text-primary">
+                        {formatStockLabel(r.stockId, r.stockName)}
+                      </span>
                     </Link>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">{r.industry}</TableCell>

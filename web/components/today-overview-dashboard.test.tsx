@@ -102,7 +102,7 @@ describe("TodayOverviewDashboard", () => {
     );
 
     const collective = screen.getByRole("region", { name: "集體動向" });
-    expect(within(collective).getByText("台積電")).toBeInTheDocument();
+    expect(within(collective).getByText("2330 台積電")).toBeInTheDocument();
     expect(within(collective).getByText("2 檔 ETF")).toBeInTheDocument();
 
     const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
@@ -115,5 +115,29 @@ describe("TodayOverviewDashboard", () => {
     );
     expect(radar).toHaveClass("min-w-0");
     expect(container.querySelector("main > div")).toHaveClass("grid-cols-[minmax(0,1fr)]");
+  });
+
+  it("海外股票名稱 fallback 成代號時只顯示一次", () => {
+    render(<TodayOverviewDashboard overview={overview} />);
+
+    const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
+    expect(within(radar).getByRole("link", { name: "NVDA US" })).toHaveTextContent(
+      /^NVDA US$/,
+    );
+  });
+
+  it("上方顯示最新資料更新日期", () => {
+    render(<TodayOverviewDashboard overview={overview} />);
+
+    expect(screen.getByText("資料更新至 2026-07-14")).toBeInTheDocument();
+  });
+
+  it("期間切換連結不重置頁面捲動位置", () => {
+    render(<TodayOverviewDashboard overview={overview} />);
+
+    expect(screen.getByTestId("range-link-week")).toHaveAttribute(
+      "data-scroll",
+      "false",
+    );
   });
 });

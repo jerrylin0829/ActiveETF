@@ -17,3 +17,17 @@ export function formatYi(valueTwd: number | null): string {
 export function formatLots(shares: number): string {
   return Math.round(shares / 1000).toLocaleString("zh-TW");
 }
+
+// 海外持股代號採 Bloomberg 式「代號 交易所」後綴；stock_info 只有台股，
+// 因此以空格加兩個大寫字母的結尾判別市場。
+export function stockMarket(stockId: string): "tw" | "overseas" {
+  return / [A-Z]{2}$/.test(stockId) ? "overseas" : "tw";
+}
+
+// 海外持股缺少 stock_info 名稱時，名稱會 fallback 成代號；此時只顯示一次。
+export function formatStockLabel(
+  stockId: string,
+  stockName: string | null | undefined,
+): string {
+  return !stockName || stockName === stockId ? stockId : `${stockId} ${stockName}`;
+}

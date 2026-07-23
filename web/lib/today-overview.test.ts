@@ -4,7 +4,10 @@ import {
   buildCollectiveMovements,
   buildOverviewDataGapWarnings,
   buildRadarPositions,
+  filterChangeWall,
+  formatWeightDelta,
   latestTradingWindow,
+  rangeBounds,
   sortChangeEvents,
   type ChangeEvent,
 } from "@/lib/today-overview";
@@ -239,5 +242,83 @@ describe("today overview data gaps", () => {
         description: "2026-07-14 有 1 檔 ETF 爬蟲失敗：00987A 台新優勢成長（ValidationError: empty holdings）。",
       },
     ]);
+  });
+});
+
+describe("formatWeightDelta", () => {
+  it("以百分比呈現、兩位小數並帶正負號", () => {
+    expect(formatWeightDelta(0.05)).toBe("+0.05%");
+    expect(formatWeightDelta(1.2345)).toBe("+1.23%");
+    expect(formatWeightDelta(-0.866)).toBe("-0.87%");
+    expect(formatWeightDelta(0)).toBe("+0.00%");
+  });
+});
+
+describe("rangeBounds", () => {
+  it("當日起訖同為選定日期", () => {
+    expect(rangeBounds("2026-07-22", "day")).toEqual({
+      start: "2026-07-22",
+      end: "2026-07-22",
+    });
+  });
+
+  it("本週從週一至選定日期", () => {
+    expect(rangeBounds("2026-07-22", "week")).toEqual({
+      start: "2026-07-20",
+      end: "2026-07-22",
+    });
+  });
+
+  it("上週從上週一至上週五", () => {
+    expect(rangeBounds("2026-07-22", "week_prev")).toEqual({
+      start: "2026-07-13",
+      end: "2026-07-17",
+    });
+  });
+
+  it("本月從月初至選定日期", () => {
+    expect(rangeBounds("2026-07-22", "month")).toEqual({
+      start: "2026-07-01",
+      end: "2026-07-22",
+    });
+  });
+
+  it("上月從上月月初至上月月底", () => {
+    expect(rangeBounds("2026-07-22", "month_prev")).toEqual({
+      start: "2026-06-01",
+      end: "2026-06-30",
+    });
+  });
+});
+
+describe("filterChangeWall", () => {
+  const event = (overrides: Partial<ChangeEvent>): ChangeEvent => ({
+    ...baseEvent,
+    ...overrides,
+  });
+  const events = [
+    event({ stockId: "2330", changeType: "NEW", weightDeltaPct: 0.5 }),
+    event({ stockId: "2454", changeType: "EXIT", weightDeltaPct: -1.2 }),
+    event({ stockId: "2317", changeType: "ADD", weightDeltaPct: 0.3 }),
+    event({ stockId: "MRVL US", changeType: "NEW", weightDeltaPct: 0.8 }),
+    event({ stockId: "2308", changeType: "TRIM", weightDeltaPct: -0.1 }),
+  ];
+
+  it("建倉出清與台股只留下 NEW/EXIT 並依權重幅度排序", () => {
+    expect(
+      filterChangeWall(events, "build_exit", "tw").map((item) => item.stockId),
+    ).toEqual(["2454", "2330"]);
+  });
+
+  it("建倉出清與海外只留下海外事件", () => {
+    expect(
+      filterChangeWall(events, "build_exit", "overseas").map((item) => item.stockId),
+    ).toEqual(["MRVL US"]);
+  });
+
+  it("加減碼與台股只留下 ADD/TRIM 並依權重幅度排序", () => {
+    expect(
+      filterChangeWall(events, "add_trim", "tw").map((item) => item.stockId),
+    ).toEqual(["2317", "2308"]);
   });
 });

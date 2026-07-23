@@ -1,7 +1,8 @@
+import { stockMarket } from "@/lib/format";
 import type { DataGapWarning } from "@/lib/rankings";
 
 export type ChangeType = "NEW" | "ADD" | "TRIM" | "EXIT";
-export type OverviewRange = "day" | "week" | "month";
+export type OverviewRange = "day" | "week" | "week_prev" | "month" | "month_prev";
 
 export type ChangeEvent = {
   etfId: string;
@@ -110,6 +111,33 @@ export function sortChangeEvents(events: ChangeEvent[]): ChangeEvent[] {
 
     return `${a.etfId}:${a.stockId}`.localeCompare(`${b.etfId}:${b.stockId}`);
   });
+}
+
+export type ChangeWallTab = "build_exit" | "add_trim";
+export type MarketFilter = "tw" | "overseas";
+
+const tabChangeTypes: Record<ChangeWallTab, ChangeType[]> = {
+  build_exit: ["NEW", "EXIT"],
+  add_trim: ["ADD", "TRIM"],
+};
+
+export function filterChangeWall(
+  events: ChangeEvent[],
+  tab: ChangeWallTab,
+  market: MarketFilter,
+): ChangeEvent[] {
+  return events
+    .filter(
+      (event) =>
+        tabChangeTypes[tab].includes(event.changeType) &&
+        stockMarket(event.stockId) === market,
+    )
+    .sort((a, b) => {
+      const weightDiff = Math.abs(b.weightDeltaPct) - Math.abs(a.weightDeltaPct);
+      return weightDiff !== 0
+        ? weightDiff
+        : `${a.etfId}:${a.stockId}`.localeCompare(`${b.etfId}:${b.stockId}`);
+    });
 }
 
 function roundWeight(value: number): number {
@@ -281,12 +309,49 @@ export function buildOverviewDataGapWarnings(failures: ScrapeFailure[]): DataGap
   ];
 }
 
+function addUtcDays(dateStr: string, days: number): string {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+export function rangeBounds(
+  selectedDate: string,
+  range: OverviewRange,
+): { start: string; end: string } {
+  const date = new Date(`${selectedDate}T00:00:00Z`);
+  const mondayOffset = (date.getUTCDay() + 6) % 7;
+
+  if (range === "day") {
+    return { start: selectedDate, end: selectedDate };
+  }
+  if (range === "week") {
+    return { start: addUtcDays(selectedDate, -mondayOffset), end: selectedDate };
+  }
+  if (range === "week_prev") {
+    const thisMonday = addUtcDays(selectedDate, -mondayOffset);
+    return {
+      start: addUtcDays(thisMonday, -7),
+      end: addUtcDays(thisMonday, -3),
+    };
+  }
+  if (range === "month") {
+    return { start: `${selectedDate.slice(0, 7)}-01`, end: selectedDate };
+  }
+
+  const previousMonthEnd = addUtcDays(`${selectedDate.slice(0, 7)}-01`, -1);
+  return {
+    start: `${previousMonthEnd.slice(0, 7)}-01`,
+    end: previousMonthEnd,
+  };
+}
+
 export function formatSharesDelta(value: number): string {
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toLocaleString("zh-TW")}`;
 }
 
 export function formatWeightDelta(value: number): string {
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(4)}pp`;
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
 }

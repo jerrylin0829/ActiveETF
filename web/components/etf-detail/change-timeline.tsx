@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { formatSignedPct } from "@/lib/format";
+import { formatSignedPct, formatStockLabel } from "@/lib/format";
 import { formatSharesDelta } from "@/lib/today-overview";
 import type { EtfChangeEvent, EtfChangeType } from "@/lib/etf-detail";
 import { cn } from "@/lib/utils";
@@ -50,8 +50,9 @@ export function ChangeTimeline({ events }: { events: EtfChangeEvent[] }) {
                       {event.changeType}
                     </Badge>
                     <div className="min-w-0">
-                      <span className="font-mono text-sm font-semibold tabular-nums">{event.stockId}</span>
-                      <span className="ml-2 text-sm">{event.stockName}</span>
+                      <span className="font-mono text-sm font-semibold tabular-nums">
+                        {formatStockLabel(event.stockId, event.stockName)}
+                      </span>
                     </div>
                     <span className={cn("font-mono text-sm tabular-nums", valueTone(event.changeType))}>
                       {formatSharesDelta(event.sharesDelta)} 股

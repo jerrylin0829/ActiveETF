@@ -4,6 +4,7 @@ import {
   buildOverviewDataGapWarnings,
   buildRadarPositions,
   latestTradingWindow,
+  rangeBounds,
   sortChangeEvents,
   type ChangeEvent,
   type ChangeType,
@@ -141,31 +142,12 @@ function latestFailedScrapeAttempts(records: ScrapeAttemptRecord[]): ScrapeAttem
 }
 
 function normalizeRange(value: string | undefined): OverviewRange {
-  return value === "week" || value === "month" ? value : "day";
-}
-
-function addDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
-function toDateString(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function rangeStartDate(selectedDate: string, range: OverviewRange): string {
-  if (range === "day") {
-    return selectedDate;
-  }
-
-  const date = new Date(`${selectedDate}T00:00:00Z`);
-  if (range === "week") {
-    const mondayOffset = (date.getUTCDay() + 6) % 7;
-    return toDateString(addDays(date, -mondayOffset));
-  }
-
-  return `${selectedDate.slice(0, 7)}-01`;
+  return value === "week" ||
+    value === "week_prev" ||
+    value === "month" ||
+    value === "month_prev"
+    ? value
+    : "day";
 }
 
 function buildRangeOptions(selectedDate: string | null, range: OverviewRange): RangeOption[] {
@@ -173,7 +155,9 @@ function buildRangeOptions(selectedDate: string | null, range: OverviewRange): R
   const options: Array<{ value: OverviewRange; label: string }> = [
     { value: "day", label: "當日" },
     { value: "week", label: "本週" },
+    { value: "week_prev", label: "上週" },
     { value: "month", label: "本月" },
+    { value: "month_prev", label: "上月" },
   ];
 
   return options.map((option) => ({
@@ -252,7 +236,7 @@ export async function fetchTodayOverview({
     };
   }
 
-  const startDate = rangeStartDate(selectedDate, range);
+  const { start: rangeStart, end: rangeEnd } = rangeBounds(selectedDate, range);
   const { data: tradingDateData, error: tradingDatesError } = await supabase
     .from("dashboard_holding_snapshot_dates")
     .select("trade_date")
@@ -291,8 +275,8 @@ export async function fetchTodayOverview({
       supabase
         .from("holding_change")
         .select(changeSelect)
-        .gte("trade_date", startDate)
-        .lte("trade_date", selectedDate)
+        .gte("trade_date", rangeStart)
+        .lte("trade_date", rangeEnd)
         .order("trade_date", { ascending: true })
         .order("etf_id", { ascending: true })
         .order("stock_id", { ascending: true })

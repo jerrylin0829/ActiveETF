@@ -1,107 +1,25 @@
 import Link from "next/link";
 import { AlertCircle, ArrowDownRight, ArrowUpRight, Radar } from "lucide-react";
 
+import { ChangeWall } from "@/components/change-wall";
 import { DataGapAlerts } from "@/components/data-gap-alerts";
 import { DateSelector } from "@/components/date-selector";
-import { formatSignedPct } from "@/lib/format";
+import { formatSignedPct, formatStockLabel } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { SiteNav } from "@/components/site-nav";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  formatSharesDelta,
   formatWeightDelta,
-  type ChangeEvent,
   type CollectiveMove,
   type TodayOverviewViewModel,
 } from "@/lib/today-overview";
 import { cn } from "@/lib/utils";
-
-const changeLabels: Record<ChangeEvent["changeType"], string> = {
-  NEW: "NEW",
-  EXIT: "EXIT",
-  ADD: "ADD",
-  TRIM: "TRIM",
-};
-
-function changeTone(changeType: ChangeEvent["changeType"]) {
-  return changeType === "NEW" || changeType === "ADD"
-    ? "text-[var(--market-up)]"
-    : "text-[var(--market-down)]";
-}
-
-function badgeTone(changeType: ChangeEvent["changeType"]) {
-  return changeType === "NEW" || changeType === "ADD"
-    ? "border-red-200 bg-red-50 text-red-700"
-    : "border-emerald-200 bg-emerald-50 text-emerald-700";
-}
 
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-md border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
       {children}
     </div>
-  );
-}
-
-function ChangeWall({ events }: { events: ChangeEvent[] }) {
-  return (
-    <section aria-labelledby="change-wall-title" className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 id="change-wall-title" className="text-xl font-semibold">
-            異動牆
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">NEW / EXIT 置頂，其次 ADD / TRIM。</p>
-        </div>
-        <Badge variant="outline">{events.length} 筆</Badge>
-      </div>
-
-      {events.length === 0 ? (
-        <EmptyState>選定日期沒有異動事件。</EmptyState>
-      ) : (
-        <div className="overflow-hidden rounded-md border border-border bg-card">
-          <div className="divide-y divide-border">
-            {events.map((event) => (
-              <article
-                key={`${event.etfId}-${event.stockId}-${event.changeType}`}
-                className="grid gap-3 px-4 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_8rem_8rem] sm:items-center"
-              >
-                <div>
-                  <Badge variant="outline" className={badgeTone(event.changeType)}>
-                    {changeLabels[event.changeType]}
-                  </Badge>
-                </div>
-                <div className="min-w-0">
-                  <Link
-                    href={`/stock/${encodeURIComponent(event.stockId)}`}
-                    className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="font-mono text-sm font-semibold tabular-nums">
-                      {event.stockId}
-                    </span>
-                    <span className="font-medium hover:text-primary">{event.stockName}</span>
-                  </Link>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    <Link
-                      href={`/etf/${encodeURIComponent(event.etfId)}`}
-                      className="rounded-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {event.etfId} {event.etfName}
-                    </Link>
-                  </div>
-                </div>
-                <div className={cn("font-mono text-sm font-semibold tabular-nums", changeTone(event.changeType))}>
-                  {formatSharesDelta(event.sharesDelta)}
-                </div>
-                <div className={cn("font-mono text-sm font-semibold tabular-nums", changeTone(event.changeType))}>
-                  {formatWeightDelta(event.weightDeltaPct)}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -137,10 +55,9 @@ function CollectiveList({
               </span>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="font-mono text-sm font-semibold tabular-nums">
-                    {item.stockId}
+                  <span className="font-medium">
+                    {formatStockLabel(item.stockId, item.stockName)}
                   </span>
-                  <span className="font-medium">{item.stockName}</span>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">{item.etfCount} 檔 ETF</div>
               </div>
@@ -163,11 +80,14 @@ function CollectiveMovements({ overview }: { overview: TodayOverviewViewModel })
           <h2 className="text-xl font-semibold">集體動向</h2>
           <p className="mt-1 text-sm text-muted-foreground">依 ETF 檔數排序，再比合計權重變化。</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {overview.rangeOptions.map((option) => (
             <Link
               key={option.value}
               href={option.href}
+              scroll={false}
+              data-testid={`range-link-${option.value}`}
+              data-scroll="false"
               className={cn(
                 "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
                 option.active
@@ -228,8 +148,9 @@ function NewPositionRadar({ overview }: { overview: TodayOverviewViewModel }) {
                       href={`/stock/${encodeURIComponent(position.stockId)}`}
                       className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <div className="font-mono font-semibold tabular-nums">{position.stockId}</div>
-                      <div className="mt-1 hover:text-primary">{position.stockName}</div>
+                      <div className="font-mono font-semibold tabular-nums hover:text-primary">
+                        {formatStockLabel(position.stockId, position.stockName)}
+                      </div>
                     </Link>
                   </td>
                   <td className="px-3 py-2 align-top font-mono tabular-nums">{position.entryDate}</td>
@@ -286,6 +207,11 @@ export function TodayOverviewDashboard({ overview }: { overview: TodayOverviewVi
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
                 看今天誰買進、誰出清，以及哪些個股被多檔主動式 ETF 同步調整。
               </p>
+              {overview.availableDates[0] ? (
+                <p className="mt-2 font-mono text-xs text-muted-foreground tabular-nums">
+                  資料更新至 {overview.availableDates[0]}
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <DateSelector

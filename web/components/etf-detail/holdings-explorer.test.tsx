@@ -67,7 +67,7 @@ describe("HoldingsTable", () => {
     );
 
     const holdingRows = screen.getAllByTestId("holding-row");
-    expect(within(holdingRows[0]).getByText("2330")).toBeInTheDocument();
+    expect(within(holdingRows[0]).getByText("2330 台積電")).toBeInTheDocument();
     expect(within(holdingRows[0]).getByText("NEW")).toBeInTheDocument();
     expect(within(holdingRows[1]).getByText("+1.00%")).toBeInTheDocument();
     expect(within(holdingRows[1]).getByText("—")).toBeInTheDocument();
@@ -90,15 +90,15 @@ describe("HoldingsTable", () => {
 
     await user.click(screen.getByRole("button", { name: "持有交易日排序" }));
     expect(screen.getAllByTestId("holding-row").map((row) => within(row).getAllByText(/\d{4}/)[0].textContent)).toEqual([
-      "2317",
-      "2330",
-      "2454",
+      "2317 鴻海",
+      "2330 台積電",
+      "2454 聯發科",
     ]);
     await user.click(screen.getByRole("button", { name: "持有交易日排序" }));
     expect(screen.getAllByTestId("holding-row").map((row) => within(row).getAllByText(/\d{4}/)[0].textContent)).toEqual([
-      "2330",
-      "2317",
-      "2454",
+      "2330 台積電",
+      "2317 鴻海",
+      "2454 聯發科",
     ]);
   });
 

@@ -57,7 +57,10 @@ describe("StockLookupPage", () => {
   });
 
   it("decodes an overseas stock id before querying Supabase", async () => {
-    fetchStockMock.mockResolvedValue({ found: true, detail: { ...detail, stockId: "NVDA US" } });
+    fetchStockMock.mockResolvedValue({
+      found: true,
+      detail: { ...detail, stockId: "NVDA US", stockName: "NVDA US" },
+    });
 
     render(await StockLookupPage({
       params: Promise.resolve({ stockId: "NVDA%20US" }),
@@ -65,6 +68,7 @@ describe("StockLookupPage", () => {
     }));
 
     expect(fetchStockMock).toHaveBeenCalledWith("NVDA US");
+    expect(screen.getByRole("heading", { name: "NVDA US" })).toBeInTheDocument();
   });
 
   it("renders identity, current count, data alerts, all sections and the range", async () => {
