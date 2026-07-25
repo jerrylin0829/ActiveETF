@@ -154,6 +154,54 @@ def snapshot_trading_dates(upto: dt.date) -> list[dt.date]:
     return [r[0] for r in rows]
 
 
+def existing_snapshot_keys(etf_ids: list[str]) -> set[tuple[str, dt.date]]:
+    """已入庫的 ETF 日期組合，作為回補冪等與續跑依據。"""
+    with conn() as c:
+        rows = c.execute(
+            """select distinct etf_id, trade_date
+               from holdings_snapshot
+               where etf_id = any(%s)""",
+            (etf_ids,),
+        ).fetchall()
+    return {(row[0], row[1]) for row in rows}
+
+
+def etf_listing_dates(etf_ids: list[str]) -> dict[str, dt.date]:
+    """以 ETF 最早的有效還原價日期近似上市日。"""
+    with conn() as c:
+        rows = c.execute(
+            """select stock_id, min(trade_date)
+               from stock_price
+               where stock_id = any(%s)
+                 and adj_close is not null
+                 and adj_close <> 'NaN'::numeric
+               group by stock_id""",
+            (etf_ids,),
+        ).fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
+def benchmark_trading_dates(
+    start: dt.date,
+    end: dt.date,
+    *,
+    benchmark_id: str = "0050",
+) -> list[dt.date]:
+    """以已快取的基準還原價取得真實交易日，不呼叫外部資料源。"""
+    with conn() as c:
+        rows = c.execute(
+            """select trade_date
+               from stock_price
+               where stock_id = %s
+                 and trade_date between %s and %s
+                 and adj_close is not null
+                 and adj_close <> 'NaN'::numeric
+               order by trade_date""",
+            (benchmark_id, start, end),
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
 def latest_common_price_date(
     stock_id: str,
     benchmark_id: str,
