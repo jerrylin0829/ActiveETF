@@ -1,4 +1,5 @@
 """統一投信 PCF adapter."""
+import datetime as dt
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -36,12 +37,15 @@ def parse(payload: dict) -> list[Holding]:
     return holdings
 
 
+def _roc(date: dt.date) -> str:
+    return f"{date.year - 1911:03d}/{date.month:02d}/{date.day:02d}"
+
+
 def _roc_today() -> str:
-    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
-    return f"{today.year - 1911:03d}/{today.month:02d}/{today.day:02d}"
+    return _roc(datetime.now(ZoneInfo("Asia/Taipei")).date())
 
 
-def fetch(entry: EtfEntry) -> list[Holding]:
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
     session = requests.Session()
     response = session.get(
         _PCF_PAGE, headers=UA, timeout=30, allow_redirects=False
@@ -56,11 +60,19 @@ def fetch(entry: EtfEntry) -> list[Holding]:
         _PCF_API,
         json={
             "fundCode": _FUND_CODES[entry.etf_id],
-            "date": _roc_today(),
-            "specificDate": False,
+            "date": _roc(date) if date else _roc_today(),
+            "specificDate": date is not None,
         },
         headers=UA,
         timeout=30,
     )
     response.raise_for_status()
     return parse(response.json())
+
+
+def fetch(entry: EtfEntry) -> list[Holding]:
+    return _fetch_pcf(entry, None)
+
+
+def fetch_at(entry: EtfEntry, date: dt.date) -> list[Holding]:
+    return _fetch_pcf(entry, date)
