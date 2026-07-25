@@ -169,8 +169,15 @@ export function HoldingsTable({
                     onKeyDown={(event) => handleKeyDown(event, row.stockId)}
                   >
                     <TableCell>
-                      <div className="font-mono text-sm font-semibold tabular-nums">
-                        {formatStockLabel(row.stockId, row.stockName)}
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-semibold tabular-nums">
+                          {formatStockLabel(row.stockId, row.stockName)}
+                        </span>
+                        {row.weightPct === 0 ? (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            觀察部位
+                          </Badge>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{row.industry}</TableCell>
