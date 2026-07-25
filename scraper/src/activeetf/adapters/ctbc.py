@@ -49,7 +49,7 @@ def parse(payload: dict) -> list[Holding]:
     return holdings
 
 
-def fetch(entry: EtfEntry) -> list[Holding]:
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
     headers = {**UA, "content-type": "application/json; charset=utf-8"}
     token_response = requests.post(
         f"{_API_BASE}/home/AuthToken",
@@ -67,10 +67,18 @@ def fetch(entry: EtfEntry) -> list[Holding]:
         json={
             "token": token,
             "FID": _FUND_IDS[entry.etf_id],
-            "StartDate": dt.date.today().isoformat(),
+            "StartDate": (date or dt.date.today()).isoformat(),
         },
         headers=headers,
         timeout=30,
     )
     response.raise_for_status()
     return parse(_data(response))
+
+
+def fetch(entry: EtfEntry) -> list[Holding]:
+    return _fetch_pcf(entry, None)
+
+
+def fetch_at(entry: EtfEntry, date: dt.date) -> list[Holding]:
+    return _fetch_pcf(entry, date)

@@ -1,4 +1,6 @@
 """安聯投信 PCF adapter."""
+import datetime as dt
+
 import requests
 
 from activeetf.adapters.base import UA
@@ -40,7 +42,7 @@ def parse(payload: dict) -> list[Holding]:
     return holdings
 
 
-def fetch(entry: EtfEntry) -> list[Holding]:
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
     session = requests.Session()
     headers = {
         **UA,
@@ -61,8 +63,19 @@ def fetch(entry: EtfEntry) -> list[Holding]:
             "Content-Type": "application/json",
             "X-XSRF-TOKEN": xsrf_token,
         },
-        json={"FundNo": _FUND_IDS[entry.etf_id], "Date": None},
+        json={
+            "FundNo": _FUND_IDS[entry.etf_id],
+            "Date": date.isoformat() if date else None,
+        },
         timeout=30,
     )
     response.raise_for_status()
     return parse(response.json())
+
+
+def fetch(entry: EtfEntry) -> list[Holding]:
+    return _fetch_pcf(entry, None)
+
+
+def fetch_at(entry: EtfEntry, date: dt.date) -> list[Holding]:
+    return _fetch_pcf(entry, date)
