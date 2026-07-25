@@ -104,6 +104,13 @@ describe("TodayOverviewDashboard", () => {
     const collective = screen.getByRole("region", { name: "集體動向" });
     expect(within(collective).getByText("2330 台積電")).toBeInTheDocument();
     expect(within(collective).getByText("2 檔 ETF")).toBeInTheDocument();
+    expect(within(collective).getAllByText("排名")).toHaveLength(2);
+    expect(within(collective).getAllByText("股票")).toHaveLength(2);
+    expect(within(collective).getAllByText("ETF 檔數")).toHaveLength(2);
+    expect(within(collective).getAllByText("合計金額")).toHaveLength(2);
+    expect(within(collective).getByText("27.50 億")).toBeInTheDocument();
+    expect(within(collective).getByText("—")).toBeInTheDocument();
+    expect(within(collective).getByText(/再比合計金額/)).toBeInTheDocument();
 
     const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
     expect(within(radar).getByText("+12.33%")).toBeInTheDocument(); // |excess| >= 10 => colored

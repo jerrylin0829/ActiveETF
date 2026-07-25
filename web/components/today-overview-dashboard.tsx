@@ -37,6 +37,12 @@ function CollectiveList({
         <Icon className={cn("size-4", toneClass)} aria-hidden="true" />
         <h3 className="font-semibold">{title}</h3>
       </div>
+      <div className="grid grid-cols-[2rem_minmax(0,1fr)_5.25rem_6rem] gap-2 border-b border-border bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
+        <span>排名</span>
+        <span>股票</span>
+        <span className="text-right">ETF 檔數</span>
+        <span className="text-right">合計金額</span>
+      </div>
       {items.length === 0 ? (
         <div className="px-4 py-6 text-sm text-muted-foreground">此區間沒有資料。</div>
       ) : (
@@ -44,20 +50,23 @@ function CollectiveList({
           {items.map((item, index) => (
             <li
               key={item.stockId}
-              className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3"
+              className="grid grid-cols-[2rem_minmax(0,1fr)_5.25rem_6rem] items-center gap-2 px-4 py-3"
             >
               <span className="font-mono text-xs text-muted-foreground tabular-nums">
                 {String(index + 1).padStart(2, "0")}
               </span>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="font-medium">
-                    {formatStockLabel(item.stockId, item.stockName)}
-                  </span>
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">{item.etfCount} 檔 ETF</div>
-              </div>
-              <span className={cn("font-mono text-sm font-semibold tabular-nums", toneClass)}>
+              <span className="min-w-0 font-medium">
+                {formatStockLabel(item.stockId, item.stockName)}
+              </span>
+              <span className="text-right text-xs text-muted-foreground">
+                {item.etfCount} 檔 ETF
+              </span>
+              <span
+                className={cn(
+                  "text-right font-mono text-sm font-semibold tabular-nums",
+                  toneClass,
+                )}
+              >
                 {formatYi(item.totalValueTwd)}
               </span>
             </li>
