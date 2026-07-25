@@ -108,6 +108,20 @@ export function buildPickingSummary(wins: number, total: number): {
   };
 }
 
+export function buildPickingSummaryWithHistory(
+  wins: number,
+  total: number,
+  historyFrom: string | null,
+): ReturnType<typeof buildPickingSummary> {
+  const summary = buildPickingSummary(wins, total);
+  return historyFrom
+    ? {
+        ...summary,
+        label: `${summary.label}｜自 ${historyFrom} 起`,
+      }
+    : summary;
+}
+
 export function winRateValue(wins: number, total: number): number | null {
   return total > 0 ? wins / total : null;
 }

@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  buildPickingSummary,
+  buildPickingSummaryWithHistory,
   formatNumber,
   formatReturn,
   formatTurnover,
@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 
 type RankingsTableProps = {
   rows: RankingRow[];
+  historyFromByEtf?: Record<string, string>;
   warnings?: DataGapWarning[];
   error?: string | null;
 };
@@ -132,13 +133,15 @@ function ReturnCell({ row, column }: { row: RankingRow; column: ReturnColumn }) 
 }
 
 function PickingCell({
+  historyFrom,
   wins,
   total,
 }: {
+  historyFrom: string | null;
   wins: number;
   total: number;
 }) {
-  const summary = buildPickingSummary(wins, total);
+  const summary = buildPickingSummaryWithHistory(wins, total, historyFrom);
   const rate = winRateValue(wins, total);
 
   return (
@@ -155,7 +158,12 @@ function PickingCell({
   );
 }
 
-export function RankingsTable({ rows, warnings = [], error = null }: RankingsTableProps) {
+export function RankingsTable({
+  rows,
+  historyFromByEtf = {},
+  warnings = [],
+  error = null,
+}: RankingsTableProps) {
   const [sortField, setSortField] = useState<SortField>("ret1m");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
@@ -295,12 +303,17 @@ export function RankingsTable({ rows, warnings = [], error = null }: RankingsTab
                   </TableCell>
                   <TableCell className="text-right align-top">
                     <PickingCell
+                      historyFrom={historyFromByEtf[row.etfId] ?? null}
                       wins={row.pickingRealizedWins}
                       total={row.pickingRealizedTotal}
                     />
                   </TableCell>
                   <TableCell className="text-right align-top">
-                    <PickingCell wins={row.pickingOpenWins} total={row.pickingOpenTotal} />
+                    <PickingCell
+                      historyFrom={historyFromByEtf[row.etfId] ?? null}
+                      wins={row.pickingOpenWins}
+                      total={row.pickingOpenTotal}
+                    />
                   </TableCell>
                   <TableCell className="text-right align-top font-mono text-sm tabular-nums">
                     {formatNumber(row.medianHoldingDays, " 天")}

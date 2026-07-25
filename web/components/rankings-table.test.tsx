@@ -89,6 +89,17 @@ describe("RankingsTable", () => {
     );
   });
 
+  it("renders the history start for both picking samples", () => {
+    render(
+      <RankingsTable
+        rows={[rows[0]]}
+        historyFromByEtf={{ "00980A": "2025-05-16" }}
+      />,
+    );
+
+    expect(screen.getAllByText(/自 2025-05-16 起/)).toHaveLength(2);
+  });
+
   it("renders data-gap warnings even when ranking rows exist", () => {
     render(
       <RankingsTable

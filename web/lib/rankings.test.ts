@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDataGapWarnings,
   buildPickingSummary,
+  buildPickingSummaryWithHistory,
   formatReturn,
   formatTurnover,
   formatWinRate,
@@ -60,6 +61,22 @@ describe("ranking formatting", () => {
     expect(buildPickingSummary(7, 12)).toEqual({
       label: "58%（7/12）",
       insufficient: false,
+    });
+  });
+
+  it("無條件在選股勝率後加註歷史起算日", () => {
+    expect(
+      buildPickingSummaryWithHistory(14, 22, "2025-05-16"),
+    ).toEqual({
+      label: "64%（14/22）｜自 2025-05-16 起",
+      insufficient: false,
+    });
+  });
+
+  it("無起算日時維持既有標籤與樣本不足規則", () => {
+    expect(buildPickingSummaryWithHistory(2, 5, null)).toEqual({
+      label: "40%（2/5）",
+      insufficient: true,
     });
   });
 
