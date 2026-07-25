@@ -120,22 +120,43 @@ def test_daily_price_cache_values_holding_without_event(
     _seed_and_cleanup,
 ):
     ids = _seed_and_cleanup
-    stock_b = ids.stocks[1]
+    stock_b, stock_c = ids.stocks[1:]
+    prices = {
+        stock_b: (50.0, 52.0),
+        stock_c: (70.0, 71.0),
+    }
+    calls = []
 
     def fake_adj_prices(stock_id, start, end):
-        assert (stock_id, start, end) == (stock_b, str(ids.date), str(ids.date))
+        assert stock_id in prices
+        assert (start, end) == (str(ids.date), str(ids.date))
+        calls.append(stock_id)
+        close, raw_close = prices[stock_id]
         return [
             {
                 "stock_id": stock_id,
                 "date": str(ids.date),
-                "close": 50.0,
-                "raw_close": 52.0,
+                "close": close,
+                "raw_close": raw_close,
             }
         ]
 
     monkeypatch.setattr(metrics.finmind, "adj_prices", fake_adj_prices)
 
     metrics.cache_daily_holding_closes(ids.date)
+    assert set(calls) == {stock_b, stock_c}
+
+    with db.conn() as c:
+        cached = {
+            row[0]: float(row[1])
+            for row in c.execute(
+                """select stock_id, adj_close from stock_price
+                   where stock_id = any(%s) and trade_date = %s""",
+                ([stock_b, stock_c], ids.date),
+            ).fetchall()
+        }
+    assert cached == {stock_b: 50.0, stock_c: 70.0}
+
     db.refresh_daily_aggregates(ids.date)
 
     with db.conn() as c:
@@ -145,6 +166,12 @@ def test_daily_price_cache_values_holding_without_event(
             (ids.date, stock_b),
         ).fetchone()
     assert float(row[0]) == 52000.0
+    with db.conn() as c:
+        assert c.execute(
+            """select count(*) from cross_holdings_daily
+               where trade_date=%s and stock_id=%s""",
+            (ids.date, stock_c),
+        ).fetchone()[0] == 0
 
 
 def test_refresh_is_idempotent(_seed_and_cleanup):
