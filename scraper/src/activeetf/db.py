@@ -68,6 +68,53 @@ def write_changes(etf_id: str, d: dt.date, changes: list[Change]) -> None:
              for ch in changes])
 
 
+def snapshot_history(etf_id: str) -> dict[dt.date, dict[str, Holding]]:
+    """Load one ETF's complete snapshot history in chronological order."""
+    with conn() as c:
+        rows = c.execute(
+            """select trade_date, stock_id, shares, weight_pct
+               from holdings_snapshot
+               where etf_id = %s
+               order by trade_date, stock_id""",
+            (etf_id,),
+        ).fetchall()
+    history: dict[dt.date, dict[str, Holding]] = {}
+    for trade_date, stock_id, shares, weight_pct in rows:
+        history.setdefault(trade_date, {})[stock_id] = Holding(
+            stock_id,
+            int(shares),
+            float(weight_pct),
+        )
+    return history
+
+
+def replace_changes(
+    etf_id: str,
+    dated_changes: list[tuple[dt.date, Change]],
+) -> None:
+    """Atomically replace one ETF's derived holding-change history."""
+    with conn() as c, c.transaction():
+        c.execute("delete from holding_change where etf_id = %s", (etf_id,))
+        with c.cursor() as cur:
+            cur.executemany(
+                """insert into holding_change
+                   (etf_id, trade_date, stock_id, change_type,
+                    shares_delta, weight_delta_pct)
+                   values (%s,%s,%s,%s,%s,%s)""",
+                [
+                    (
+                        etf_id,
+                        trade_date,
+                        change.stock_id,
+                        change.change_type,
+                        change.shares_delta,
+                        change.weight_delta_pct,
+                    )
+                    for trade_date, change in dated_changes
+                ],
+            )
+
+
 def scoring_events(etf_id: str, before: dt.date | None = None) -> list[tuple]:
     """Holding changes with prior shares, ready for metrics.build_rounds()."""
     with conn() as c:
