@@ -19,7 +19,7 @@ def parse(payload: dict) -> list[Holding]:
         for row in section.get("holdings", []):
             shares = int(float(row["holdingShares"]))
             weight = float(row["holdingPerc"])
-            if shares > 0 and weight > 0:
+            if shares > 0:
                 holdings.append(
                     Holding(
                         stock_id=str(row["holdingCode"]).strip(),

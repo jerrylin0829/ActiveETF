@@ -35,9 +35,9 @@
 create table cross_holdings_daily (
   trade_date       date not null,
   stock_id         text not null,
-  etf_count        int not null,               -- 涵蓋檔數（持有該股的主動 ETF 數）
+  etf_count        int not null,               -- 涵蓋檔數（實質持有該股的主動 ETF 數）
   total_weight_pct numeric(10,4) not null,     -- Σ 各 ETF 對該股的權重（單位：%）
-  total_shares     bigint not null,            -- Σ 持有股數（單位：股）
+  total_shares     bigint not null,            -- Σ 實質部位股數（單位：股）
   total_value_twd  numeric(20,2),              -- Σ 股數 × 當日收盤價（單位：新台幣元）；缺價則 null
   new_count  int not null default 0,           -- 當日 NEW 事件的 ETF 檔數
   add_count  int not null default 0,           -- 當日 ADD 事件的 ETF 檔數
@@ -48,6 +48,7 @@ create table cross_holdings_daily (
 ```
 
 設計決定：
+- **實質部位才進聚合**：`weight_pct > 0` 才計入 `etf_count`、`total_shares` 與產業 `stock_count`；`weight_pct = 0` 的觀察部位保留在原始快照，交集明細另以「另有 N 檔 ETF 為觀察部位」揭露
 - **不存持有 ETF 清單（JSON）**：使用者展開某股票時，前端直接查 `holdings_snapshot` 與 `holding_change`（單股單日 ≤ 27 列），避免反正規化
 - **金額**：`股數 × stock_price.close`；海外股票或當日缺價者為 null，不湊數
 - **異動計數**直接彙總 `holding_change`，沿用主 spec 事件定義（股數變化 + 權重變化 ≥ 0.05pp 同時成立），不另創第二套異動規則
@@ -61,7 +62,7 @@ create table industry_weight_daily (
   trade_date       date not null,
   industry         text not null,              -- stock_info.industry；為空者歸「未分類」
   sum_weight_pct   numeric(12,4) not null,     -- Σ 全體主動 ETF 在該產業的權重（單位：%）
-  stock_count      int not null,               -- 該產業被持有的不重複股票檔數
+  stock_count      int not null,               -- 該產業被實質持有的不重複股票檔數
   etf_count_total  int not null,               -- 當日有快照的主動 ETF 檔數（平均值分母）
   primary key (trade_date, industry)
 );
@@ -97,7 +98,7 @@ create table industry_weight_daily (
 | 合計張數 | 單位：張（1 張 = 1,000 股），千分位 | 同上 |
 | 當日異動 | 徽章：`新進×N`／`加碼×N`／`減碼×N`／`出清×N`；新進與加碼紅、減碼與出清綠 | 事件計數欄 |
 
-**列展開**（點列展開，不跳頁）：該股被哪些 ETF 持有——ETF 名稱、權重（%）、張數、當日異動類型。前端即時查 `holdings_snapshot` + `holding_change`。
+**列展開**（點列或鍵盤 disclosure control 展開，不跳頁）：逐列顯示實質持有該股的 ETF 名稱、權重（%）、張數、當日異動類型；觀察部位不混入涵蓋名單，另顯示「另有 N 檔 ETF 為觀察部位」。前端即時查 `holdings_snapshot` + `holding_change`。
 
 **篩選列**（client-side）：
 - 涵蓋檔數：`全部 / ≥2 / ≥3 / ≥5 / 獨門(=1)`

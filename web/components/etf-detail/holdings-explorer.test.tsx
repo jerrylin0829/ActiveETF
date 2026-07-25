@@ -123,6 +123,36 @@ describe("HoldingsTable", () => {
     fireEvent.keyDown(holdingRows[0], { key: " " });
     expect(pushMock).toHaveBeenCalledWith("/etf/00981A?stock=2330#weight-history");
   });
+
+  it("marks a zero-weight holding as an observation position", () => {
+    render(
+      <HoldingsTable
+        etfId="00981A"
+        rows={[
+          {
+            stockId: "3008",
+            stockName: "大立光",
+            industry: "光電業",
+            shares: 1_000,
+            weightPct: 0,
+            previousChange: 0,
+            twentyDayChange: 0,
+            entryDate: null,
+            holdingDays: null,
+            isLongHeld: false,
+          },
+        ]}
+        selectedStockId={null}
+        previousDate="2026-07-30"
+        twentyDayDate="2026-07-11"
+      />,
+    );
+
+    const row = screen.getByTestId("holding-row");
+    expect(within(row).getByText("0.00%")).toBeInTheDocument();
+    expect(within(row).getByText("觀察部位")).toBeInTheDocument();
+    expect(within(row).queryByText("NEW")).not.toBeInTheDocument();
+  });
 });
 
 describe("WeightHistoryChart", () => {

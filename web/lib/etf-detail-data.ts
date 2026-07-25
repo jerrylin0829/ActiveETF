@@ -37,7 +37,7 @@ type SnapshotRecord = {
   trade_date: string;
   stock_id: string;
   shares: number | string;
-  weight_pct: number | string;
+  weight_pct: number | string | null;
 };
 
 type OpenPositionRecord = {
@@ -79,6 +79,7 @@ const scrapeLogLimit = 250;
 
 function toNumber(value: number | string | null): number | null {
   if (value === null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -183,12 +184,26 @@ async function fetchStockInfo(
   };
 }
 
-function mapSnapshot(record: SnapshotRecord): SnapshotHolding {
+function validWeight(record: SnapshotRecord): number | null {
+  const weight = toNumber(record.weight_pct);
+  return weight !== null && weight >= 0 ? weight : null;
+}
+
+function mapSnapshot(record: SnapshotRecord): SnapshotHolding | null {
+  const weightPct = validWeight(record);
+  if (weightPct === null) return null;
   return {
     stockId: record.stock_id,
     shares: toNumber(record.shares) ?? 0,
-    weightPct: toNumber(record.weight_pct) ?? 0,
+    weightPct,
   };
+}
+
+function mapValidSnapshots(records: SnapshotRecord[]): SnapshotHolding[] {
+  return records.flatMap((record) => {
+    const holding = mapSnapshot(record);
+    return holding ? [holding] : [];
+  });
 }
 
 function buildWarnings({
@@ -197,12 +212,14 @@ function buildWarnings({
   globalLatestDate,
   scrapeLogs,
   openPositions,
+  invalidWeightRecords,
 }: {
   etf: EtfRecord;
   latestDate: string | null;
   globalLatestDate: string | null;
   scrapeLogs: ScrapeLogRecord[];
   openPositions: OpenPositionRecord[];
+  invalidWeightRecords: SnapshotRecord[];
 }): DataGapWarning[] {
   const warnings: DataGapWarning[] = [];
   if (!latestDate) {
@@ -243,6 +260,21 @@ function buildWarnings({
     warnings.push({
       title: "持有天數快取尚未更新",
       description: `${stalePositions.length} 筆 open_position 早於最新快照 ${latestDate}。`,
+    });
+  }
+  if (invalidWeightRecords.length > 0) {
+    const byDate = new Map<string, Set<string>>();
+    for (const record of invalidWeightRecords) {
+      const stockIds = byDate.get(record.trade_date) ?? new Set<string>();
+      stockIds.add(record.stock_id);
+      byDate.set(record.trade_date, stockIds);
+    }
+    warnings.push({
+      title: "持股權重資料無效",
+      description: Array.from(byDate)
+        .sort(([left], [right]) => right.localeCompare(left))
+        .map(([date, stockIds]) => `${date}：${Array.from(stockIds).sort().join("、")}`)
+        .join("；"),
     });
   }
   return warnings;
@@ -324,6 +356,12 @@ export async function fetchEtfDetail(
   ]);
 
   const currentRecords = snapshotResult.data.filter((record) => record.trade_date === latestDate);
+  const previousRecords = previousDate
+    ? snapshotResult.data.filter((record) => record.trade_date === previousDate)
+    : [];
+  const twentyDayRecords = twentyDayDate
+    ? snapshotResult.data.filter((record) => record.trade_date === twentyDayDate)
+    : [];
   const timelineStockIds = changeResult.data.map((record) => record.stock_id);
   const stockIds = Array.from(new Set([
     ...currentRecords.map((record) => record.stock_id),
@@ -343,12 +381,16 @@ export async function fetchEtfDetail(
     asOfDate: record.as_of_date,
   }));
   const holdings = buildHoldingRows({
-    current: currentRecords.map(mapSnapshot),
+    current: mapValidSnapshots(currentRecords),
     previous: previousDate
-      ? snapshotResult.data.filter((record) => record.trade_date === previousDate).map(mapSnapshot)
+      ? previousRecords.some((record) => validWeight(record) === null)
+        ? null
+        : mapValidSnapshots(previousRecords)
       : null,
     twentyDaysAgo: twentyDayDate
-      ? snapshotResult.data.filter((record) => record.trade_date === twentyDayDate).map(mapSnapshot)
+      ? twentyDayRecords.some((record) => validWeight(record) === null)
+        ? null
+        : mapValidSnapshots(twentyDayRecords)
       : null,
     stockInfo,
     openPositions: positions,
@@ -392,10 +434,13 @@ export async function fetchEtfDetail(
     sharesDelta: toNumber(record.shares_delta) ?? 0,
     weightDeltaPct: toNumber(record.weight_delta_pct) ?? 0,
   }));
-  const historyRecords: WeightHistoryRecord[] = historyResult.data.map((record) => ({
-    tradeDate: record.trade_date,
-    weightPct: toNumber(record.weight_pct) ?? 0,
-  }));
+  const historyRecords: WeightHistoryRecord[] = historyResult.data.flatMap((record) => {
+    const weightPct = validWeight(record);
+    return weightPct === null ? [] : [{ tradeDate: record.trade_date, weightPct }];
+  });
+  const invalidWeightRecords = [...snapshotResult.data, ...historyResult.data].filter(
+    (record) => validWeight(record) === null,
+  );
   const metricRecord = ((metricQuery.data ?? []) as MetricRecord[])[0];
   const scrapeLogs = (scrapeQuery.data ?? []) as ScrapeLogRecord[];
   const errors = [
@@ -438,6 +483,7 @@ export async function fetchEtfDetail(
         globalLatestDate: dateResult.globalLatestDate,
         scrapeLogs,
         openPositions: openPositionResult.data,
+        invalidWeightRecords,
       }),
       error: errors.length > 0 ? errors.join("；") : null,
     },

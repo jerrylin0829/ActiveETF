@@ -25,7 +25,7 @@ def parse(payload: dict) -> list[Holding]:
         for row in asset.get("Details") or []:
             shares = int(float(row["Share"]))
             weight = float(row["NavRate"])
-            if shares > 0 and weight > 0:
+            if shares > 0:
                 holdings.append(
                     Holding(
                         stock_id=str(row["DetailCode"]).strip(),

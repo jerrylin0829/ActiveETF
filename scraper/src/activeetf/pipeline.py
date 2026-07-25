@@ -15,6 +15,7 @@ class Deps:
     load_snapshot = staticmethod(db.load_snapshot)
     write_snapshot = staticmethod(db.write_snapshot)
     write_changes = staticmethod(db.write_changes)
+    scoring_events = staticmethod(db.scoring_events)
     known_stock_ids = staticmethod(db.known_stock_ids)
     log_scrape = staticmethod(db.log_scrape)
     @staticmethod
@@ -35,7 +36,14 @@ def scrape_one(entry: EtfEntry, today: dt.date, deps) -> None:
         if prev_date is not None:
             prev = deps.load_snapshot(entry.etf_id, prev_date)
             curr = {h.stock_id: h for h in holdings}
-            deps.write_changes(entry.etf_id, today, diff_snapshots(prev, curr))
+            open_stock_ids = metrics.open_round_stock_ids(
+                deps.scoring_events(entry.etf_id, before=today)
+            )
+            deps.write_changes(
+                entry.etf_id,
+                today,
+                diff_snapshots(prev, curr, open_stock_ids=open_stock_ids),
+            )
         deps.log_scrape(entry.etf_id, today, "ok")
     except Exception as ex:   # 單檔失敗不擴散（spec §5 隔離）；ValidationError 也走這裡
         deps.log_scrape(entry.etf_id, today, "fail",

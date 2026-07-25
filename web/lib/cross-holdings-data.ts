@@ -18,7 +18,7 @@ type HoldingRecord = {
   etf_id: string;
   stock_id: string;
   shares: number | string;
-  weight_pct: number | string;
+  weight_pct: number | string | null;
   etf: { name: string } | { name: string }[] | null;
 };
 
@@ -49,6 +49,7 @@ const stockInfoChunkSize = 200;
 
 function toNumber(value: number | string | null): number | null {
   if (value === null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -175,29 +176,43 @@ export async function fetchCrossHoldings(dateParam?: string): Promise<CrossHoldi
     (changeRes.data ?? []).map((c) => [`${c.etf_id}:${c.stock_id}`, c.change_type]),
   );
 
-  const rows: CrossRow[] = (crossRes.data ?? []).map((r) => ({
-    stockId: r.stock_id,
-    stockName: stockInfo.get(r.stock_id)?.name ?? r.stock_id,
-    industry: stockInfo.get(r.stock_id)?.industry ?? "未分類",
-    etfCount: r.etf_count,
-    totalWeightPct: toNumber(r.total_weight_pct) ?? 0,
-    totalShares: toNumber(r.total_shares) ?? 0,
-    totalValueTwd: toNumber(r.total_value_twd),
-    newCount: r.new_count,
-    addCount: r.add_count,
-    trimCount: r.trim_count,
-    exitCount: r.exit_count,
-  }));
+  const invalidCrossRows: string[] = [];
+  const rows: CrossRow[] = (crossRes.data ?? []).flatMap((r) => {
+    const totalWeightPct = toNumber(r.total_weight_pct);
+    if (totalWeightPct === null || totalWeightPct < 0) {
+      invalidCrossRows.push(`${r.stock_id} 合計權重無效`);
+      return [];
+    }
+    return [{
+      stockId: r.stock_id,
+      stockName: stockInfo.get(r.stock_id)?.name ?? r.stock_id,
+      industry: stockInfo.get(r.stock_id)?.industry ?? "未分類",
+      etfCount: r.etf_count,
+      totalWeightPct,
+      totalShares: toNumber(r.total_shares) ?? 0,
+      totalValueTwd: toNumber(r.total_value_twd),
+      newCount: r.new_count,
+      addCount: r.add_count,
+      trimCount: r.trim_count,
+      exitCount: r.exit_count,
+    }];
+  });
 
   const details: Record<string, CrossDetail[]> = {};
   const etfIdsThatDay = new Set<string>();
+  const invalidHoldingRows: string[] = [];
   for (const h of holdingRes.data ?? []) {
     etfIdsThatDay.add(h.etf_id);
+    const weightPct = toNumber(h.weight_pct);
+    if (weightPct === null || weightPct < 0) {
+      invalidHoldingRows.push(`${h.etf_id}/${h.stock_id} 權重無效`);
+      continue;
+    }
     const rel = relatedEtf(h.etf);
     (details[h.stock_id] ??= []).push({
       etfId: h.etf_id,
       etfName: rel?.name ?? h.etf_id,
-      weightPct: toNumber(h.weight_pct) ?? 0,
+      weightPct,
       shares: toNumber(h.shares) ?? 0,
       changeType: (changeMap.get(`${h.etf_id}:${h.stock_id}`) ?? null) as CrossDetail["changeType"],
     });
@@ -212,6 +227,8 @@ export async function fetchCrossHoldings(dateParam?: string): Promise<CrossHoldi
     changeRes.error,
     etfRes.error?.message,
     stockRes.error,
+    ...invalidCrossRows,
+    ...invalidHoldingRows,
   ].filter(Boolean);
 
   return {

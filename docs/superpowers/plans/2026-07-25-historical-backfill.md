@@ -837,7 +837,7 @@ Usage:  set -a && source .env.local && set +a
 import time
 import traceback
 
-from activeetf import db
+from activeetf import db, metrics
 from activeetf.adapters import base as adapter_base
 from activeetf.backfill import backfill_targets
 from activeetf.diff import diff_snapshots
@@ -887,7 +887,14 @@ def main() -> None:
             if prev_date is not None:
                 prev = db.load_snapshot(etf_id, prev_date)
                 curr = {h.stock_id: h for h in holdings}
-                db.write_changes(etf_id, date, diff_snapshots(prev, curr))
+                open_stock_ids = metrics.open_round_stock_ids(
+                    db.scoring_events(etf_id, before=date)
+                )
+                db.write_changes(
+                    etf_id,
+                    date,
+                    diff_snapshots(prev, curr, open_stock_ids=open_stock_ids),
+                )
             db.log_scrape(etf_id, date, "ok")
             ok += 1
         except Exception as ex:

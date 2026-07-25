@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from activeetf.adapters import uni
 from activeetf.registry import by_id
 
@@ -10,12 +12,13 @@ FIXTURE = Path(__file__).parent / "fixtures" / "uni_00981A.json"
 def test_parses_stock_assets_into_plausible_holdings():
     holdings = uni.parse(json.loads(FIXTURE.read_text()))
 
-    assert len(holdings) >= 10
-    assert 70 <= sum(h.weight_pct for h in holdings) <= 101
+    assert len(holdings) == 50
+    assert sum(h.weight_pct == 0 for h in holdings) == 15
+    assert sum(h.weight_pct for h in holdings) == pytest.approx(96.19)
     for holding in holdings:
         assert holding.stock_id
         assert holding.shares > 0
-        assert 0 < holding.weight_pct < 60
+        assert 0 <= holding.weight_pct < 60
     assert len({h.stock_id for h in holdings}) == len(holdings)
 
 

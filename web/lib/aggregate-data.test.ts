@@ -211,6 +211,51 @@ describe("fetchCrossHoldings", () => {
       expect(queries.every((query) => query.orders.map((item) => item.column).join(",") === order)).toBe(true);
     }
   });
+
+  it("交集明細排除 invalid 權重但保留真正的零權重", async () => {
+    installSupabaseDouble({
+      dashboard_cross_dates: [{ trade_date: "2026-07-15" }],
+      cross_holdings_daily: [crossRecord("2330")],
+      holdings_snapshot: [
+        {
+          trade_date: "2026-07-15",
+          etf_id: "00980A",
+          stock_id: "2330",
+          shares: 1_000,
+          weight_pct: 1,
+          etf: { name: "實質持有" },
+        },
+        {
+          trade_date: "2026-07-15",
+          etf_id: "00981A",
+          stock_id: "2330",
+          shares: 1_000,
+          weight_pct: 0,
+          etf: { name: "觀察部位" },
+        },
+        {
+          trade_date: "2026-07-15",
+          etf_id: "00982A",
+          stock_id: "2330",
+          shares: 1_000,
+          weight_pct: "NaN",
+          etf: { name: "無效資料" },
+        },
+      ],
+      holding_change: [],
+      etf: [{ etf_id: "00980A" }, { etf_id: "00981A" }, { etf_id: "00982A" }],
+      stock_info: [{ stock_id: "2330", name: "台積電", industry: "半導體業" }],
+    });
+
+    const result = await fetchCrossHoldings("2026-07-15");
+
+    expect(result.details["2330"].map((detail) => detail.etfId)).toEqual([
+      "00980A",
+      "00981A",
+    ]);
+    expect(result.details["2330"][1].weightPct).toBe(0);
+    expect(result.error).toContain("00982A/2330 權重無效");
+  });
 });
 
 describe("fetchRotationData", () => {

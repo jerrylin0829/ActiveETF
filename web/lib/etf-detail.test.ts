@@ -42,6 +42,19 @@ describe("buildHoldingRows", () => {
     expect(rows.some((row) => row.stockId === "9999")).toBe(false);
   });
 
+  it("does not mark a missing previous observation position as NEW", () => {
+    const rows = buildHoldingRows({
+      current: [{ stockId: "3008", shares: 1_000, weightPct: 0 }],
+      previous: [{ stockId: "2330", shares: 2_000, weightPct: 12 }],
+      twentyDaysAgo: null,
+      stockInfo: new Map([["3008", { name: "大立光", industry: "光電業" }]]),
+      openPositions: [],
+    });
+
+    expect(rows[0]).toMatchObject({ stockId: "3008", previousChange: 0 });
+    expect(rows[0].previousChange).not.toBe("NEW");
+  });
+
   it("subtracts zero for a stock absent on an existing 20-day comparison date", () => {
     const rows = buildHoldingRows({
       current: [current[0]],
@@ -179,6 +192,29 @@ describe("industry and history helpers", () => {
       "2330",
       "2454",
       "US1",
+    ]);
+  });
+
+  it("keeps observation positions last for both weight sort directions", () => {
+    const observation: EtfHoldingRow = {
+      ...holdingRows[1],
+      stockId: "3008",
+      stockName: "大立光",
+      weightPct: 0,
+    };
+    const mixedRows = [...holdingRows, observation];
+
+    expect(sortHoldingRows(mixedRows, "weightPct", "asc").map((row) => row.stockId)).toEqual([
+      "US1",
+      "2454",
+      "2330",
+      "3008",
+    ]);
+    expect(sortHoldingRows(mixedRows, "weightPct", "desc").map((row) => row.stockId)).toEqual([
+      "2330",
+      "2454",
+      "US1",
+      "3008",
     ]);
   });
 });

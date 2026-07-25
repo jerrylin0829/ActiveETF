@@ -2,8 +2,10 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -47,12 +49,60 @@ const changeLabel: Record<string, string> = {
 const UP_BADGE = "border-red-200 bg-red-50 text-red-700";
 const DOWN_BADGE = "border-emerald-200 bg-emerald-50 text-emerald-700";
 
+function ExpandedDetailRows({
+  stockId,
+  details,
+}: {
+  stockId: string;
+  details: CrossDetail[];
+}) {
+  const materialDetails = details.filter((detail) => detail.weightPct > 0);
+  const observationCount = details.filter((detail) => detail.weightPct === 0).length;
+
+  return (
+    <>
+      {materialDetails.map((detail) => (
+        <TableRow key={`${stockId}-${detail.etfId}`} className="bg-muted/40">
+          <TableCell colSpan={2} className="pl-8 font-mono text-sm">
+            <Link
+              href={`/etf/${encodeURIComponent(detail.etfId)}`}
+              className="rounded-sm font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {detail.etfId} {detail.etfName}
+            </Link>
+          </TableCell>
+          <TableCell />
+          <TableCell className="tabular-nums">{formatPct(detail.weightPct)}</TableCell>
+          <TableCell className="hidden sm:table-cell" />
+          <TableCell className="hidden tabular-nums sm:table-cell">
+            {formatLots(detail.shares)}
+          </TableCell>
+          <TableCell>
+            {detail.changeType ? changeLabel[detail.changeType] : ""}
+          </TableCell>
+        </TableRow>
+      ))}
+      {observationCount > 0 ? (
+        <TableRow className="bg-muted/40">
+          <TableCell colSpan={7} className="pl-8 text-sm text-muted-foreground">
+            另有 {observationCount} 檔 ETF 為觀察部位
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
+  );
+}
+
 export function CrossHoldingsTable({ rows, details }: CrossHoldingsTableProps) {
   const [sort, setSort] = useState<SortState>({ key: "etfCount", desc: true });
   const [coverage, setCoverage] = useState<CoverageFilter>("all");
   const [industry, setIndustry] = useState<string>("");
   const [changedOnly, setChangedOnly] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  function toggleExpanded(stockId: string) {
+    setExpanded((current) => current === stockId ? null : stockId);
+  }
 
   const industries = useMemo(() => [...new Set(rows.map((r) => r.industry))].sort(), [rows]);
   const visible = useMemo(() => {
@@ -145,18 +195,42 @@ export function CrossHoldingsTable({ rows, details }: CrossHoldingsTableProps) {
                 <TableRow
                   data-testid="cross-row"
                   className="cursor-pointer"
-                  onClick={() => setExpanded(expanded === r.stockId ? null : r.stockId)}
+                  onClick={() => toggleExpanded(r.stockId)}
                 >
                   <TableCell>
-                    <Link
-                      href={`/stock/${encodeURIComponent(r.stockId)}`}
-                      onClick={(event) => event.stopPropagation()}
-                      className="inline-flex flex-wrap items-baseline gap-x-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="font-mono font-semibold tabular-nums hover:text-primary">
-                        {formatStockLabel(r.stockId, r.stockName)}
-                      </span>
-                    </Link>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`${expanded === r.stockId ? "收合" : "展開"} ${r.stockId} 持有明細`}
+                        aria-expanded={expanded === r.stockId}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleExpanded(r.stockId);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          toggleExpanded(r.stockId);
+                        }}
+                      >
+                        <ChevronRight
+                          className={expanded === r.stockId ? "rotate-90" : undefined}
+                          aria-hidden="true"
+                        />
+                      </Button>
+                      <Link
+                        href={`/stock/${encodeURIComponent(r.stockId)}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex flex-wrap items-baseline gap-x-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="font-mono font-semibold tabular-nums hover:text-primary">
+                          {formatStockLabel(r.stockId, r.stockName)}
+                        </span>
+                      </Link>
+                    </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">{r.industry}</TableCell>
                   <TableCell className="tabular-nums">{r.etfCount}</TableCell>
@@ -174,26 +248,9 @@ export function CrossHoldingsTable({ rows, details }: CrossHoldingsTableProps) {
                     {r.exitCount > 0 && <Badge className={DOWN_BADGE}>出清×{r.exitCount}</Badge>}
                   </TableCell>
                 </TableRow>
-                {expanded === r.stockId &&
-                  (details[r.stockId] ?? []).map((d) => (
-                    <TableRow key={`${r.stockId}-${d.etfId}`} className="bg-muted/40">
-                      <TableCell colSpan={2} className="pl-8 font-mono text-sm">
-                        <Link
-                          href={`/etf/${encodeURIComponent(d.etfId)}`}
-                          className="rounded-sm font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          {d.etfId} {d.etfName}
-                        </Link>
-                      </TableCell>
-                      <TableCell />
-                      <TableCell className="tabular-nums">{formatPct(d.weightPct)}</TableCell>
-                      <TableCell className="hidden sm:table-cell" />
-                      <TableCell className="hidden tabular-nums sm:table-cell">
-                        {formatLots(d.shares)}
-                      </TableCell>
-                      <TableCell>{d.changeType ? changeLabel[d.changeType] : ""}</TableCell>
-                    </TableRow>
-                  ))}
+                {expanded === r.stockId ? (
+                  <ExpandedDetailRows stockId={r.stockId} details={details[r.stockId] ?? []} />
+                ) : null}
               </Fragment>
             ))}
           </TableBody>

@@ -83,6 +83,51 @@ describe("CrossHoldingsTable", () => {
     );
   });
 
+  it("提供可聚焦且具 aria-expanded 的鍵盤展開控制", async () => {
+    const user = userEvent.setup();
+    render(<CrossHoldingsTable rows={rows} details={details} />);
+
+    const disclosure = screen.getByRole("button", { name: "展開 2330 持有明細" });
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+
+    disclosure.focus();
+    await user.keyboard("{Enter}");
+
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(/主動統一台股增長/)).toBeInTheDocument();
+  });
+
+  it("展開時彙總觀察部位但不列入實質持有明細", async () => {
+    const user = userEvent.setup();
+    const detailsWithObservation: Record<string, CrossDetail[]> = {
+      "2330": [
+        ...details["2330"],
+        {
+          etfId: "00988A",
+          etfName: "主動統一全球創新",
+          weightPct: 0,
+          shares: 1_000,
+          changeType: null,
+        },
+        {
+          etfId: "00989A",
+          etfName: "無效權重 ETF",
+          weightPct: Number.NaN,
+          shares: 1_000,
+          changeType: null,
+        },
+      ],
+    };
+    render(<CrossHoldingsTable rows={rows} details={detailsWithObservation} />);
+
+    await user.click(screen.getAllByTestId("cross-row")[0]);
+
+    expect(screen.getByText("另有 1 檔 ETF 為觀察部位")).toBeInTheDocument();
+    expect(screen.queryByText(/主動統一全球創新/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/無效權重 ETF/)).not.toBeInTheDocument();
+    expect(screen.getByText(/主動統一台股增長/)).toBeInTheDocument();
+  });
+
   it("股票名稱連到個股反查頁且不切換展開狀態", async () => {
     const user = userEvent.setup();
     render(<CrossHoldingsTable rows={rows} details={details} />);

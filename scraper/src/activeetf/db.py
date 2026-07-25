@@ -68,6 +68,31 @@ def write_changes(etf_id: str, d: dt.date, changes: list[Change]) -> None:
              for ch in changes])
 
 
+def scoring_events(etf_id: str, before: dt.date | None = None) -> list[tuple]:
+    """Holding changes with prior shares, ready for metrics.build_rounds()."""
+    with conn() as c:
+        rows = c.execute(
+            """
+            select hc.trade_date, hc.stock_id, hc.change_type, hc.shares_delta,
+                   coalesce(hs.shares, 0)
+            from holding_change hc
+            left join holdings_snapshot hs
+              on hs.etf_id = hc.etf_id and hs.stock_id = hc.stock_id
+             and hs.trade_date = (
+                 select max(trade_date)
+                 from holdings_snapshot
+                 where etf_id = hc.etf_id and stock_id = hc.stock_id
+                   and trade_date < hc.trade_date
+             )
+            where hc.etf_id = %s
+              and (%s::date is null or hc.trade_date < %s::date)
+            order by hc.trade_date, hc.stock_id
+            """,
+            (etf_id, before, before),
+        ).fetchall()
+    return [tuple(row) for row in rows]
+
+
 def upsert_prices(rows: list[tuple]) -> None:
     """rows: (stock_id, trade_date, close, adj_close)"""
     with conn() as c, c.cursor() as cur:
@@ -199,7 +224,7 @@ def refresh_daily_aggregates(d: dt.date) -> None:
               from holding_change where trade_date = %s
               group by stock_id
             ) c1 on c1.stock_id = h.stock_id
-            where h.trade_date = %s
+            where h.trade_date = %s and h.weight_pct > 0
             group by h.trade_date, h.stock_id""", (d, d))
         c.execute("delete from industry_weight_daily where trade_date=%s", (d,))
         c.execute("""
@@ -212,6 +237,6 @@ def refresh_daily_aggregates(d: dt.date) -> None:
                      where trade_date = %s)
             from holdings_snapshot h
             left join stock_info si on si.stock_id = h.stock_id
-            where h.trade_date = %s
+            where h.trade_date = %s and h.weight_pct > 0
             group by h.trade_date, coalesce(nullif(trim(si.industry), ''), '未分類')""",
             (d, d))

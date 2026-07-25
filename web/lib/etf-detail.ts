@@ -135,7 +135,7 @@ export function buildHoldingRows({
     const previousChange = previousWeights === null
       ? null
       : previousWeight === undefined
-        ? "NEW"
+        ? holding.weightPct === 0 ? 0 : "NEW"
         : round4(holding.weightPct - previousWeight);
     const twentyDayChange = twentyDayWeights === null
       ? null
@@ -217,6 +217,11 @@ export function sortHoldingRows(
   direction: SortDirection,
 ): EtfHoldingRow[] {
   return [...rows].sort((left, right) => {
+    if (field === "weightPct") {
+      const leftObservation = left.weightPct === 0;
+      const rightObservation = right.weightPct === 0;
+      if (leftObservation !== rightObservation) return leftObservation ? 1 : -1;
+    }
     const leftValue = sortableValue(left, field);
     const rightValue = sortableValue(right, field);
     if (leftValue === null && rightValue === null) {

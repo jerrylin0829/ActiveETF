@@ -71,7 +71,7 @@ def parse_xlsx(content: bytes) -> list[Holding]:
         shares = int(float(row.get("J", "0")))
         market_value = float(row.get("R", "0"))
         weight = market_value / total_market_value * 100
-        if stock_id and shares > 0 and weight > 0:
+        if stock_id and shares > 0:
             holdings.append(
                 Holding(
                     stock_id=stock_id,
