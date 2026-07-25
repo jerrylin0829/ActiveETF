@@ -25,7 +25,7 @@ def parse(html: str) -> list[Holding]:
             stock_id, _name, shares, weight = cells
             shares_int = int(_num(shares))
             weight_pct = _num(weight)
-            if shares_int > 0 and weight_pct > 0 and stock_id not in by_stock:
+            if shares_int > 0 and stock_id not in by_stock:
                 by_stock[stock_id] = Holding(
                     stock_id=stock_id, shares=shares_int, weight_pct=weight_pct
                 )

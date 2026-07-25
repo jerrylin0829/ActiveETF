@@ -75,7 +75,7 @@ def parse_xlsx(content: bytes) -> list[Holding]:
             continue
         shares = int(_num(shares_text))
         weight = _num(weight_text)
-        if shares > 0 and weight > 0:
+        if shares > 0:
             holdings.append(
                 Holding(
                     stock_id=stock_id,

@@ -38,7 +38,7 @@ def parse(payload: dict) -> list[Holding]:
         for row in section.get("Data", []):
             shares = int(_num(row["qty_"]))
             weight = _num(row["weights_"])
-            if shares > 0 and weight > 0:
+            if shares > 0:
                 holdings.append(
                     Holding(
                         stock_id=str(row["code_"]).strip(),

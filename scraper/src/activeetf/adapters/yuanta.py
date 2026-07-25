@@ -13,7 +13,7 @@ def parse(payload: dict) -> list[Holding]:
     for row in payload.get("FundWeights", {}).get("StockWeights", []):
         shares = int(float(row["qty"]))
         weight = float(row["weights"])
-        if shares > 0 and weight > 0:
+        if shares > 0:
             holdings.append(
                 Holding(
                     stock_id=str(row["code"]).strip(),

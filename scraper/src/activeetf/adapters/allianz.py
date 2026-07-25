@@ -29,7 +29,7 @@ def parse(payload: dict) -> list[Holding]:
             row = dict(zip(columns, values, strict=False))
             shares = int(_num(row["股數"]))
             weight = _num(row["權重(%)"])
-            if shares > 0 and weight > 0:
+            if shares > 0:
                 holdings.append(
                     Holding(
                         stock_id=str(row["股票代號"]).strip(),

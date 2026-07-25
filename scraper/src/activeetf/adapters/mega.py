@@ -23,7 +23,7 @@ def parse(html: str) -> list[Holding]:
         stock_id, _name, shares, weight = cells
         shares_int = int(_num(shares))
         weight_pct = _num(weight)
-        if stock_id and shares_int > 0 and weight_pct > 0:
+        if stock_id and shares_int > 0:
             holdings.append(
                 Holding(
                     stock_id=stock_id,
