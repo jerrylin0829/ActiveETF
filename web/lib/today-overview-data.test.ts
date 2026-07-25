@@ -132,6 +132,7 @@ function installSupabaseDouble(overrides: Partial<Record<string, DataRecord[]>> 
     scrape_log: [],
     etf: [{ etf_id: "00987A", name: "台新優勢成長" }],
     stock_info: [],
+    stock_price: [],
     open_position: [],
     ...overrides,
   };
@@ -303,6 +304,131 @@ describe("fetchTodayOverview", () => {
       positionQueries.every(
         (query) => query.orders.map((order) => order.column).join(",") ===
           "etf_id,stock_id,entry_date",
+      ),
+    ).toBe(true);
+  });
+
+  it("queries bounded daily closes and joins them to collective values", async () => {
+    const executions = installSupabaseDouble({
+      holding_change: [
+        {
+          etf_id: "00980A",
+          trade_date: "2026-07-13",
+          stock_id: "2330",
+          change_type: "ADD",
+          shares_delta: 1000,
+          weight_delta_pct: 0.1,
+          etf: { name: "主動野村臺灣優選", issuer: "野村" },
+        },
+        {
+          etf_id: "00981A",
+          trade_date: "2026-07-14",
+          stock_id: "2330",
+          change_type: "NEW",
+          shares_delta: 2000,
+          weight_delta_pct: 0.2,
+          etf: { name: "主動統一台股增長", issuer: "統一" },
+        },
+      ],
+      stock_price: [
+        { stock_id: "2330", trade_date: "2026-07-13", close: 1000 },
+        { stock_id: "2330", trade_date: "2026-07-14", close: 1010 },
+        { stock_id: "2330", trade_date: "2026-07-12", close: 990 },
+      ],
+    });
+
+    const result = await fetchTodayOverview({ date: "2026-07-14", range: "week" });
+
+    expect(result.collective.increases[0]).toMatchObject({
+      stockId: "2330",
+      etfCount: 2,
+      totalValueTwd: 3020000,
+    });
+    const priceQueries = executions.filter((execution) => execution.table === "stock_price");
+    expect(priceQueries.length).toBeGreaterThan(0);
+    expect(priceQueries.every((query) => query.filters.some((filter) =>
+      filter.kind === "gte" && filter.column === "trade_date" && filter.value === "2026-07-13",
+    ))).toBe(true);
+    expect(priceQueries.every((query) => query.filters.some((filter) =>
+      filter.kind === "lte" && filter.column === "trade_date" && filter.value === "2026-07-14",
+    ))).toBe(true);
+    expect(
+      priceQueries.every(
+        (query) => query.orders.map((order) => order.column).join(",") ===
+          "trade_date,stock_id",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps a collective value null when an event-day close is missing", async () => {
+    installSupabaseDouble({
+      holding_change: [
+        {
+          etf_id: "00980A",
+          trade_date: "2026-07-13",
+          stock_id: "2330",
+          change_type: "ADD",
+          shares_delta: 1000,
+          weight_delta_pct: 0.1,
+          etf: { name: "主動野村臺灣優選", issuer: "野村" },
+        },
+        {
+          etf_id: "00981A",
+          trade_date: "2026-07-14",
+          stock_id: "2330",
+          change_type: "NEW",
+          shares_delta: 2000,
+          weight_delta_pct: 0.2,
+          etf: { name: "主動統一台股增長", issuer: "統一" },
+        },
+      ],
+      stock_price: [
+        { stock_id: "2330", trade_date: "2026-07-13", close: 1000 },
+      ],
+    });
+
+    const result = await fetchTodayOverview({ date: "2026-07-14", range: "week" });
+
+    expect(result.collective.increases[0]?.totalValueTwd).toBeNull();
+  });
+
+  it("pages monthly close rows under a complete primary-key order", async () => {
+    const stockIds = Array.from({ length: 100 }, (_, index) =>
+      String(2000 + index),
+    );
+    const dates = Array.from({ length: 11 }, (_, index) =>
+      `2026-07-${String(index + 1).padStart(2, "0")}`,
+    );
+    const executions = installSupabaseDouble({
+      dashboard_holding_change_dates: [{ trade_date: "2026-07-14" }],
+      holding_change: stockIds.map((stockId) => ({
+        etf_id: "00980A",
+        trade_date: "2026-07-14",
+        stock_id: stockId,
+        change_type: "ADD",
+        shares_delta: 1000,
+        weight_delta_pct: 0.1,
+        etf: { name: "主動野村臺灣優選", issuer: "野村" },
+      })),
+      stock_price: stockIds.flatMap((stockId) =>
+        dates.map((tradeDate) => ({
+          stock_id: stockId,
+          trade_date: tradeDate,
+          close: 100,
+        })),
+      ),
+    });
+
+    await fetchTodayOverview({ date: "2026-07-14", range: "month" });
+
+    const priceQueries = executions.filter(
+      (execution) => execution.table === "stock_price",
+    );
+    expect(priceQueries.some((query) => query.range?.[0] === 1000)).toBe(true);
+    expect(
+      priceQueries.every(
+        (query) => query.orders.map((order) => order.column).join(",") ===
+          "trade_date,stock_id",
       ),
     ).toBe(true);
   });
