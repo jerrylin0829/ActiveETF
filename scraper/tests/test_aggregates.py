@@ -15,21 +15,24 @@ def _wipe():
         for t in ("cross_holdings_daily", "industry_weight_daily",
                   "holding_change", "holdings_snapshot", "stock_price"):
             c.execute(f"delete from {t} where trade_date = %s", (D,))
-        c.execute("delete from stock_info where stock_id in ('_T91','_T92')")
-        c.execute("delete from etf where etf_id in ('_TA','_TB')")
+        c.execute("delete from stock_info where stock_id in ('_T91','_T92','_T93')")
+        c.execute("delete from etf where etf_id in ('_TA','_TB','_TC')")
 
 @pytest.fixture(autouse=True)
 def _seed_and_cleanup():
     _wipe()
     with db.conn() as c:
         c.execute("insert into etf (etf_id, name, issuer) values "
-                  "('_TA','a','x'), ('_TB','b','x')")
+                  "('_TA','a','x'), ('_TB','b','x'), ('_TC','c','x')")
         c.execute("insert into stock_info (stock_id, name, industry, market) values "
-                  "('_T91','alpha','水泥工業','twse'), ('_T92','beta','','twse')")
+                  "('_T91','alpha','水泥工業','twse'), "
+                  "('_T92','beta','','twse'), "
+                  "('_T93','gamma','水泥工業','twse')")
         c.execute("insert into stock_price (stock_id, trade_date, close, adj_close) values "
                   "('_T91', %s, 100, 100)", (D,))  # _T92 has no price on purpose
     db.write_snapshot("_TA", D, [Holding("_T91", 2000, 10.0), Holding("_T92", 1000, 5.0)])
     db.write_snapshot("_TB", D, [Holding("_T91", 3000, 8.0)])
+    db.write_snapshot("_TC", D, [Holding("_T91", 1000, 0.0), Holding("_T93", 1000, 0.0)])
     db.write_changes("_TA", D, [Change("_T91", "ADD", 500, 1.0)])
     db.write_changes("_TB", D, [Change("_T91", "NEW", 3000, 8.0)])
     yield
@@ -48,6 +51,7 @@ def test_cross_holdings_aggregation():
     assert (a[5], a[6], a[7], a[8]) == (1, 1, 0, 0)   # one NEW + one ADD
     b = rows["_T92"]
     assert (b[1], float(b[2]), b[3], b[4]) == (1, 5.0, 1000, None)  # no price -> null value
+    assert "_T93" not in rows
 
 def test_industry_weight_aggregation():
     db.refresh_daily_aggregates(D)
@@ -57,7 +61,7 @@ def test_industry_weight_aggregation():
                from industry_weight_daily where trade_date=%s""", (D,)).fetchall()}
     assert float(rows["水泥工業"][1]) == 18.0
     assert rows["水泥工業"][2] == 1
-    assert rows["水泥工業"][3] == 2          # two ETFs had a snapshot that day
+    assert rows["水泥工業"][3] == 3          # three ETFs had a snapshot that day
     assert float(rows["未分類"][1]) == 5.0   # blank industry falls back to 未分類
 
 

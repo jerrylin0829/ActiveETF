@@ -199,7 +199,7 @@ def refresh_daily_aggregates(d: dt.date) -> None:
               from holding_change where trade_date = %s
               group by stock_id
             ) c1 on c1.stock_id = h.stock_id
-            where h.trade_date = %s
+            where h.trade_date = %s and h.weight_pct > 0
             group by h.trade_date, h.stock_id""", (d, d))
         c.execute("delete from industry_weight_daily where trade_date=%s", (d,))
         c.execute("""
@@ -212,6 +212,6 @@ def refresh_daily_aggregates(d: dt.date) -> None:
                      where trade_date = %s)
             from holdings_snapshot h
             left join stock_info si on si.stock_id = h.stock_id
-            where h.trade_date = %s
+            where h.trade_date = %s and h.weight_pct > 0
             group by h.trade_date, coalesce(nullif(trim(si.industry), ''), '未分類')""",
             (d, d))
