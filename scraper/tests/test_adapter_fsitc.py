@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 
 from activeetf.adapters import fsitc
@@ -47,3 +48,25 @@ def test_fetch_posts_fund_id_to_get_hd(monkeypatch):
             {"pStrFundID": "182", "pStrDate": ""},
         )
     ]
+
+
+def test_fetch_at_uses_slash_date(monkeypatch):
+    captured = {}
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"d": "[]"}
+
+    def fake_post(url, *, json, headers, timeout):
+        captured.update(json)
+        return Resp()
+
+    monkeypatch.setattr(fsitc.requests, "post", fake_post)
+
+    fsitc.fetch_at(by_id("00994A"), dt.date(2026, 6, 15))
+
+    assert captured["pStrDate"] == "2026/06/15"
+    assert captured["pStrFundID"] == "182"

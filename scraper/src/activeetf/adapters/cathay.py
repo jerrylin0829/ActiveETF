@@ -1,4 +1,5 @@
 """國泰投信持股權重 adapter."""
+import datetime as dt
 import re
 import xml.etree.ElementTree as ET
 import zipfile
@@ -86,6 +87,21 @@ def parse_xlsx(content: bytes) -> list[Holding]:
     return holdings
 
 
+def _download(fund_code: str, search_date: str) -> list[Holding]:
+    workbook = requests.get(
+        f"{_API_BASE}/DownloadETFWeightExcel",
+        params={
+            "FundCode": fund_code,
+            "SearchDate": search_date,
+            "status": 1,
+        },
+        headers=UA,
+        timeout=30,
+    )
+    workbook.raise_for_status()
+    return parse_xlsx(workbook.content)
+
+
 def fetch(entry: EtfEntry) -> list[Holding]:
     fund_code = _FUND_CODES[entry.etf_id]
     info = requests.get(
@@ -99,16 +115,8 @@ def fetch(entry: EtfEntry) -> list[Holding]:
     if payload.get("returnCode") != "2000":
         raise ValueError("Cathay fund info request failed")
     nav_date = payload["result"]["navDate"].replace("/", "-")
+    return _download(fund_code, nav_date)
 
-    workbook = requests.get(
-        f"{_API_BASE}/DownloadETFWeightExcel",
-        params={
-            "FundCode": fund_code,
-            "SearchDate": nav_date,
-            "status": 1,
-        },
-        headers=UA,
-        timeout=30,
-    )
-    workbook.raise_for_status()
-    return parse_xlsx(workbook.content)
+
+def fetch_at(entry: EtfEntry, date: dt.date) -> list[Holding]:
+    return _download(_FUND_CODES[entry.etf_id], date.isoformat())

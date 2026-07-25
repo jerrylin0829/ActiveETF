@@ -1,3 +1,4 @@
+import datetime as dt
 from pathlib import Path
 
 from activeetf.adapters import cathay
@@ -58,3 +59,27 @@ def test_fetch_uses_latest_nav_date_for_official_weight_workbook(monkeypatch):
             {"FundCode": "EA", "SearchDate": "2026-07-08", "status": 1},
         ),
     ]
+
+
+def test_fetch_at_uses_iso_search_date(monkeypatch):
+    captured = {}
+
+    class Resp:
+        content = b""
+
+        def raise_for_status(self):
+            pass
+
+    def fake_get(url, *, params, headers, timeout):
+        captured["url"] = url
+        captured.update(params)
+        return Resp()
+
+    monkeypatch.setattr(cathay.requests, "get", fake_get)
+    monkeypatch.setattr(cathay, "parse_xlsx", lambda content: [])
+
+    cathay.fetch_at(by_id("00400A"), dt.date(2026, 6, 15))
+
+    assert captured["SearchDate"] == "2026-06-15"
+    assert captured["FundCode"] == cathay._FUND_CODES["00400A"]
+    assert "GetETFInfoMain" not in captured["url"]

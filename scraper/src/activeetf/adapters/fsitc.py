@@ -1,4 +1,5 @@
 """第一金投信 PCF adapter."""
+import datetime as dt
 import json
 from urllib.parse import parse_qs, urljoin, urlparse
 
@@ -40,15 +41,26 @@ def _fund_id(url: str) -> str:
     return fund_id
 
 
-def fetch(entry: EtfEntry) -> list[Holding]:
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
     if not entry.pcf_url:
         raise ValueError("pcf_url is required")
     endpoint = urljoin(entry.pcf_url, "WebAPI.aspx/Get_hd")
     r = requests.post(
         endpoint,
-        json={"pStrFundID": _fund_id(entry.pcf_url), "pStrDate": ""},
+        json={
+            "pStrFundID": _fund_id(entry.pcf_url),
+            "pStrDate": date.strftime("%Y/%m/%d") if date else "",
+        },
         headers={**UA, "Referer": entry.pcf_url},
         timeout=30,
     )
     r.raise_for_status()
     return parse(r.json())
+
+
+def fetch(entry: EtfEntry) -> list[Holding]:
+    return _fetch_pcf(entry, None)
+
+
+def fetch_at(entry: EtfEntry, date: dt.date) -> list[Holding]:
+    return _fetch_pcf(entry, date)
