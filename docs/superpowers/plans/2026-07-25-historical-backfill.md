@@ -887,7 +887,12 @@ def main() -> None:
             if prev_date is not None:
                 prev = db.load_snapshot(etf_id, prev_date)
                 curr = {h.stock_id: h for h in holdings}
-                db.write_changes(etf_id, date, diff_snapshots(prev, curr))
+                open_stock_ids = db.open_new_stock_ids(etf_id, before=date)
+                db.write_changes(
+                    etf_id,
+                    date,
+                    diff_snapshots(prev, curr, open_stock_ids=open_stock_ids),
+                )
             db.log_scrape(etf_id, date, "ok")
             ok += 1
         except Exception as ex:
