@@ -30,9 +30,9 @@ Planner：Claude Code ｜ 日期：2026-07-25 ｜ 目標分支前綴：`codex/`
   | 無 → 觀察部位 | 無事件（權重變化 0 < 0.05pp，既有門檻自然擋掉） |
 | 觀察部位 → 實質部位 | 股數有變且 `abs(Δweight) >= 0.05pp` 時為 **NEW** |
 | 實質部位 → 觀察部位 | 股數有變且 `abs(Δweight) >= 0.05pp` 時為 **EXIT** |
-  | 觀察部位 → 無 | 原則上無事件；若該股已有未關閉 NEW 回合，消失日補記 EXIT |
+  | 觀察部位 → 無 | 原則上無事件；若該股已有未關閉選股計分回合，消失日補記 EXIT |
   | 實質 → 實質 | ADD / TRIM（不變） |
-- ✅ **NEW 回合不得因低於門檻的實質→觀察轉換而永久懸空**：diff 必須接收該日期以前的未關閉 NEW 股票集合。開放回合進入觀察後若消失，於消失日記 EXIT；若回到實質部位，沿用原回合且不得再記 NEW
+- ✅ **選股計分回合不得因低於門檻的實質→觀察轉換而永久懸空**：diff 必須接收該日期以前依 `build_rounds()` 判定的未關閉股票集合，涵蓋 NEW 與股數增幅 ≥10% 的 ADD。開放回合進入觀察後若消失，於消失日記 EXIT；若回到實質部位，沿用原回合且不得再記 NEW
 - ✅ **交集表只計實質部位**（User 裁決 A）：`cross_holdings_daily.etf_count` 排除觀察部位；明細展開時另行顯示「另有 N 檔為觀察部位」
 - ✅ **`shares_delta` / `weight_delta_pct` 一律記實際差值**（`h.shares - p.shares`），不因跨越邊界而改記全額——純進出情境下與現行行為完全一致（`p` 不存在時差值即全額）
 
@@ -52,7 +52,7 @@ def _is_observation(h: Holding) -> bool:
     return h.weight_pct == 0
 ```
 
-判定改為「把觀察部位視同不存在」，並接收該日期以前的未關閉 NEW 股票集合：`p is None or _is_observation(p)` 且 `not _is_observation(h)` 的候選事件類型為 NEW；`p` 為實質而 `h` 為觀察的候選事件類型為 EXIT；兩端皆為觀察通常無事件。觀察／實質跨界與既有 ADD/TRIM 一樣，皆須 `ds != 0 and abs(dw) >= 0.05` 才實際記事件，避免同股數的上游四捨五入製造假進出。若該股已有未關閉 NEW 回合，觀察→無必須補 EXIT；觀察→實質則沿用原回合，符合門檻時只記 ADD/TRIM。
+判定改為「把觀察部位視同不存在」，並接收該日期以前依 `build_rounds()` 判定的未關閉選股計分股票集合：`p is None or _is_observation(p)` 且 `not _is_observation(h)` 的候選事件類型為 NEW；`p` 為實質而 `h` 為觀察的候選事件類型為 EXIT；兩端皆為觀察通常無事件。觀察／實質跨界與既有 ADD/TRIM 一樣，皆須 `ds != 0 and abs(dw) >= 0.05` 才實際記事件，避免同股數的上游四捨五入製造假進出。若該股已有未關閉回合，觀察→無必須補 EXIT；觀察→實質則沿用原回合，符合門檻時只記 ADD/TRIM。
 
 ### 3. `scraper/src/activeetf/db.py::refresh_daily_aggregates`
 
@@ -93,6 +93,7 @@ def _is_observation(h: Holding) -> bool:
 - `uv run pytest`、`npm test`、`tsc --noEmit`、`lint`、`build` 全過
 - `diff.py` 測試涵蓋五種轉換（無→觀察、觀察→實質=NEW、實質→觀察=EXIT、觀察→無、實質→實質）；**特別驗證觀察→實質產生 NEW 而非 ADD**，以及同股數或 `abs(Δweight) < 0.05pp` 的跨界不產生事件
 - 四日狀態回歸：`NEW 1.00% → TRIM 0.01% → 觀察部位 0% → 消失` 必須在最後一日產生 EXIT，且 `build_rounds()`／`open_position` 不得留下 `exit=None`
+- 基線持股回歸：`既有持股 → ADD +20% → TRIM 0.01% → 觀察部位 0% → 消失` 同樣必須產生 EXIT，關閉由 ADD 建立的選股計分回合
 - adapter 測試：以含 0 權重列的 fixture 驗證該列被保留且 `weight_pct == 0`
 - `refresh_daily_aggregates` 測試：觀察部位不計入 `etf_count`
 - 真資料驗收：00981A 抓取後持股數為 51（非 37）、權重合計仍 93.72%、`scrape_log` 為 ok
@@ -106,7 +107,7 @@ def _is_observation(h: Holding) -> bool:
 ## Risks
 
 - **首次執行後持股筆數跳增**（37→51）：已確認 `validate.py` 的筆數檢查只防崩塌（`len < prev * ratio`），增加不會誤擋。但 PR body 應記錄各檔實際增減，供 Operator 對帳
-- **既有 10 個交易日的快照仍缺觀察部位**：本片不重抓（歷史回補片會以修正後的 parser 抓取更早期間；既有 10 日若要補齊需另行刪除後重抓，屬 Operator 判斷）。事件重算時仍須依日期正序維護未關閉 NEW 狀態，避免低權重回合永久懸空
+- **既有 10 個交易日的快照仍缺觀察部位**：本片不重抓（歷史回補片會以修正後的 parser 抓取更早期間；既有 10 日若要補齊需另行刪除後重抓，屬 Operator 判斷）。事件重算時仍須依日期正序維護所有未關閉選股計分回合，避免低權重回合永久懸空
 - **其他 10 家 adapter 的實際影響未知**：本次僅實測統一。Generator 應於 PR body 列出各家修改後的持股筆數變化，若某家暴增（例如翻倍）需檢視是否誤含非持股列（如現金、期貨）
 - **交集表涵蓋檔數可能下降**：排除觀察部位後，某些股票的涵蓋檔數會減少——這是修正而非退步，但 PR body 應說明以免被誤判為 bug
 
