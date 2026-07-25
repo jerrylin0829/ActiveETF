@@ -151,6 +151,7 @@ describe("HoldingsTable", () => {
     const row = screen.getByTestId("holding-row");
     expect(within(row).getByText("0.00%")).toBeInTheDocument();
     expect(within(row).getByText("觀察部位")).toBeInTheDocument();
+    expect(within(row).queryByText("NEW")).not.toBeInTheDocument();
   });
 });
 

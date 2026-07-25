@@ -135,7 +135,7 @@ export function buildHoldingRows({
     const previousChange = previousWeights === null
       ? null
       : previousWeight === undefined
-        ? "NEW"
+        ? holding.weightPct === 0 ? 0 : "NEW"
         : round4(holding.weightPct - previousWeight);
     const twentyDayChange = twentyDayWeights === null
       ? null
