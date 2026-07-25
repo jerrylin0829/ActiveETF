@@ -31,6 +31,12 @@ type StockInfoRecord = {
   name: string;
 };
 
+type StockPriceRecord = {
+  stock_id: string;
+  trade_date: string;
+  close: number | string | null;
+};
+
 type EtfRecord = {
   etf_id: string;
   name: string;
@@ -59,6 +65,7 @@ type OpenPositionRecord = {
 };
 
 const pageSize = 1000;
+const stockQueryChunkSize = 100;
 const changeSelect = `
   etf_id,
   trade_date,
@@ -167,9 +174,13 @@ function buildRangeOptions(selectedDate: string | null, range: OverviewRange): R
   }));
 }
 
-function mapChangeRecord(record: HoldingChangeRecord, stockNames: Map<string, string>): ChangeEvent {
+function mapChangeRecord(
+  record: HoldingChangeRecord,
+  stockNames: Map<string, string>,
+  dailyCloses?: Map<string, number | null>,
+): ChangeEvent {
   const etf = relatedEtf(record.etf);
-  return {
+  const event: ChangeEvent = {
     etfId: record.etf_id,
     etfName: etf?.name ?? record.etf_id,
     issuer: etf?.issuer ?? "未提供",
@@ -180,6 +191,12 @@ function mapChangeRecord(record: HoldingChangeRecord, stockNames: Map<string, st
     sharesDelta: toNumber(record.shares_delta),
     weightDeltaPct: toNumber(record.weight_delta_pct),
   };
+  return dailyCloses
+    ? {
+        ...event,
+        close: dailyCloses.get(`${record.stock_id}:${record.trade_date}`) ?? null,
+      }
+    : event;
 }
 
 async function fetchStockNames(stockIds: string[]): Promise<{ data: Map<string, string>; error: string | null }> {
@@ -200,6 +217,52 @@ async function fetchStockNames(stockIds: string[]): Promise<{ data: Map<string, 
   return {
     data: new Map(((data ?? []) as StockInfoRecord[]).map((record) => [record.stock_id, record.name])),
     error: null,
+  };
+}
+
+async function fetchDailyCloses(
+  stockIds: string[],
+  startDate: string,
+  endDate: string,
+): Promise<{ data: Map<string, number | null>; error: string | null }> {
+  if (stockIds.length === 0) {
+    return { data: new Map(), error: null };
+  }
+
+  const supabase = createReadOnlySupabaseClient();
+  const chunks = Array.from(
+    { length: Math.ceil(stockIds.length / stockQueryChunkSize) },
+    (_, index) =>
+      stockIds.slice(index * stockQueryChunkSize, (index + 1) * stockQueryChunkSize),
+  );
+  const results = await Promise.all(
+    chunks.map((chunk) =>
+      fetchPaged<StockPriceRecord>((from, to) =>
+        supabase
+          .from("stock_price")
+          .select("stock_id, trade_date, close")
+          .in("stock_id", chunk)
+          .gte("trade_date", startDate)
+          .lte("trade_date", endDate)
+          .order("trade_date", { ascending: true })
+          .order("stock_id", { ascending: true })
+          .range(from, to),
+      ),
+    ),
+  );
+  const closes = new Map<string, number | null>();
+  for (const result of results) {
+    for (const record of result.data) {
+      closes.set(
+        `${record.stock_id}:${record.trade_date}`,
+        toNumberOrNull(record.close),
+      );
+    }
+  }
+
+  return {
+    data: closes,
+    error: results.map((result) => result.error).filter(Boolean).join("；") || null,
   };
 }
 
@@ -322,13 +385,21 @@ export async function fetchTodayOverview({
     ...radarChangesResult.data,
   ];
   const stockIds = Array.from(new Set(allChangeRecords.map((record) => record.stock_id)));
-  const stockNamesResult = await fetchStockNames(stockIds);
+  const rangeStockIds = Array.from(
+    new Set(rangeChangesResult.data.map((record) => record.stock_id)),
+  );
+  const [stockNamesResult, dailyClosesResult] = await Promise.all([
+    fetchStockNames(stockIds),
+    fetchDailyCloses(rangeStockIds, rangeStart, rangeEnd),
+  ]);
   const stockNames = stockNamesResult.data;
 
   const selectedEvents = sortChangeEvents(
     selectedChangesResult.data.map((record) => mapChangeRecord(record, stockNames)),
   );
-  const rangeEvents = rangeChangesResult.data.map((record) => mapChangeRecord(record, stockNames));
+  const rangeEvents = rangeChangesResult.data.map((record) =>
+    mapChangeRecord(record, stockNames, dailyClosesResult.data),
+  );
   const radarEvents = radarChangesResult.data.map((record) => mapChangeRecord(record, stockNames));
   const etfNames = new Map(
     (((etfsResult.data ?? []) as EtfRecord[]).map((record) => [record.etf_id, record.name])),
@@ -360,6 +431,7 @@ export async function fetchTodayOverview({
     scrapeFailuresResult.error,
     etfsResult.error?.message,
     stockNamesResult.error,
+    dailyClosesResult.error,
     openPositionsResult.error,
   ].filter(Boolean);
 

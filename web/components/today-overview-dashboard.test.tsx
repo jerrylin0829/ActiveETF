@@ -32,7 +32,7 @@ const overview: TodayOverviewViewModel = {
         stockId: "2330",
         stockName: "台積電",
         etfCount: 2,
-        totalWeightDeltaPct: 0.74,
+        totalValueTwd: 2750000000,
       },
     ],
     decreases: [
@@ -40,7 +40,7 @@ const overview: TodayOverviewViewModel = {
         stockId: "2303",
         stockName: "聯電",
         etfCount: 1,
-        totalWeightDeltaPct: -0.31,
+        totalValueTwd: null,
       },
     ],
   },
@@ -91,7 +91,7 @@ describe("TodayOverviewDashboard", () => {
 
     expect(screen.getByRole("heading", { name: "異動牆" })).toBeInTheDocument();
     expect(screen.getByText("NEW")).toBeInTheDocument();
-    expect(screen.getByText("+12,000")).toBeInTheDocument();
+    expect(screen.getAllByText("+12 張")).toHaveLength(2);
     expect(screen.getByRole("link", { name: /00980A 主動野村臺灣優選/ })).toHaveAttribute(
       "href",
       "/etf/00980A",
@@ -104,6 +104,13 @@ describe("TodayOverviewDashboard", () => {
     const collective = screen.getByRole("region", { name: "集體動向" });
     expect(within(collective).getByText("2330 台積電")).toBeInTheDocument();
     expect(within(collective).getByText("2 檔 ETF")).toBeInTheDocument();
+    expect(within(collective).getAllByText("排名")).toHaveLength(2);
+    expect(within(collective).getAllByText("股票")).toHaveLength(2);
+    expect(within(collective).getAllByText("ETF 檔數")).toHaveLength(2);
+    expect(within(collective).getAllByText("合計金額")).toHaveLength(2);
+    expect(within(collective).getByText("27.50 億")).toBeInTheDocument();
+    expect(within(collective).getByText("—")).toBeInTheDocument();
+    expect(within(collective).getByText(/再比合計金額/)).toBeInTheDocument();
 
     const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
     expect(within(radar).getByText("+12.33%")).toBeInTheDocument(); // |excess| >= 10 => colored

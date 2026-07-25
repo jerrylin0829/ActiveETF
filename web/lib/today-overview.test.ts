@@ -6,6 +6,7 @@ import {
   buildRadarPositions,
   filterChangeWall,
   formatWeightDelta,
+  groupChangeWall,
   latestTradingWindow,
   rangeBounds,
   sortChangeEvents,
@@ -36,23 +37,46 @@ describe("today overview change events", () => {
     expect(sorted.map((event) => event.changeType)).toEqual(["NEW", "EXIT", "ADD", "TRIM"]);
   });
 
-  it("aggregates collective moves by ETF count before total weight delta", () => {
+  it("aggregates collective moves by ETF count before total value", () => {
     const result = buildCollectiveMovements([
-      { ...baseEvent, etfId: "A", stockId: "2330", weightDeltaPct: 0.2, changeType: "ADD" },
-      { ...baseEvent, etfId: "B", stockId: "2330", weightDeltaPct: 0.1, changeType: "NEW" },
-      { ...baseEvent, etfId: "C", stockId: "3008", weightDeltaPct: 0.9, changeType: "ADD" },
-      { ...baseEvent, etfId: "D", stockId: "2303", weightDeltaPct: -1.1, changeType: "TRIM" },
-      { ...baseEvent, etfId: "E", stockId: "2303", weightDeltaPct: -0.2, changeType: "EXIT" },
-      { ...baseEvent, etfId: "F", stockId: "2317", weightDeltaPct: -2.5, changeType: "TRIM" },
+      { ...baseEvent, etfId: "A", stockId: "2330", sharesDelta: 2000, changeType: "ADD", close: 1000 },
+      { ...baseEvent, etfId: "B", stockId: "2330", sharesDelta: 1000, changeType: "NEW", close: 1000 },
+      { ...baseEvent, etfId: "C", stockId: "3008", sharesDelta: 1000, changeType: "ADD", close: 4000 },
+      { ...baseEvent, etfId: "D", stockId: "2303", sharesDelta: -4000, changeType: "TRIM", close: 50 },
+      { ...baseEvent, etfId: "E", stockId: "2303", sharesDelta: -1000, changeType: "EXIT", close: 50 },
+      { ...baseEvent, etfId: "F", stockId: "2317", sharesDelta: -1000, changeType: "TRIM", close: 120 },
     ]);
 
-    expect(result.increases.map((item) => [item.stockId, item.etfCount, item.totalWeightDeltaPct])).toEqual([
-      ["2330", 2, 0.3],
-      ["3008", 1, 0.9],
+    expect(result.increases.map((item) => [item.stockId, item.etfCount, item.totalValueTwd])).toEqual([
+      ["2330", 2, 3000000],
+      ["3008", 1, 4000000],
     ]);
-    expect(result.decreases.map((item) => [item.stockId, item.etfCount, item.totalWeightDeltaPct])).toEqual([
-      ["2303", 2, -1.3],
-      ["2317", 1, -2.5],
+    expect(result.decreases.map((item) => [item.stockId, item.etfCount, item.totalValueTwd])).toEqual([
+      ["2303", 2, -250000],
+      ["2317", 1, -120000],
+    ]);
+  });
+
+  it("sorts equal ETF counts by total value magnitude", () => {
+    const result = buildCollectiveMovements([
+      { ...baseEvent, etfId: "A", stockId: "2330", sharesDelta: 1000, close: 100 },
+      { ...baseEvent, etfId: "B", stockId: "3008", sharesDelta: 1000, close: 500 },
+    ]);
+
+    expect(result.increases.map((item) => item.stockId)).toEqual(["3008", "2330"]);
+  });
+
+  it("propagates a missing close to the whole stock value and sorts it as zero", () => {
+    const result = buildCollectiveMovements([
+      { ...baseEvent, etfId: "A", stockId: "2330", sharesDelta: 1000, close: 100 },
+      { ...baseEvent, etfId: "B", stockId: "2330", sharesDelta: 2000, close: null },
+      { ...baseEvent, etfId: "C", stockId: "3008", sharesDelta: 1000, close: 1 },
+      { ...baseEvent, etfId: "D", stockId: "3008", sharesDelta: 1000, close: 1 },
+    ]);
+
+    expect(result.increases.map((item) => [item.stockId, item.totalValueTwd])).toEqual([
+      ["3008", 2000],
+      ["2330", null],
     ]);
   });
 });
@@ -320,5 +344,50 @@ describe("filterChangeWall", () => {
     expect(
       filterChangeWall(events, "add_trim", "tw").map((item) => item.stockId),
     ).toEqual(["2317", "2308"]);
+  });
+});
+
+describe("groupChangeWall", () => {
+  const event = (overrides: Partial<ChangeEvent>): ChangeEvent => ({
+    ...baseEvent,
+    ...overrides,
+  });
+  const events = [
+    event({ etfId: "A", stockId: "2330", stockName: "台積電", changeType: "NEW", sharesDelta: 4800000, weightDeltaPct: 0.6 }),
+    event({ etfId: "B", stockId: "2330", stockName: "台積電", changeType: "EXIT", sharesDelta: -1500000, weightDeltaPct: -1.2 }),
+    event({ etfId: "C", stockId: "2454", stockName: "聯發科", changeType: "NEW", sharesDelta: 100000, weightDeltaPct: 2.1 }),
+    event({ etfId: "D", stockId: "2454", stockName: "聯發科", changeType: "NEW", sharesDelta: 200000, weightDeltaPct: 0.3 }),
+    event({ etfId: "E", stockId: "2317", stockName: "鴻海", changeType: "NEW", sharesDelta: 500000, weightDeltaPct: 1.8 }),
+    event({ etfId: "F", stockId: "MRVL US", stockName: "MRVL US", changeType: "NEW", sharesDelta: 1120, weightDeltaPct: 4 }),
+    event({ etfId: "G", stockId: "2330", stockName: "台積電", changeType: "ADD", sharesDelta: 300000, weightDeltaPct: 3 }),
+  ];
+
+  it("filters before grouping and sorts each group by single-event weight impact", () => {
+    const groups = groupChangeWall(events, "build_exit", "tw", "etf_count");
+
+    expect(groups.map((group) => [group.stockId, group.etfCount, group.totalSharesDelta])).toEqual([
+      ["2454", 2, 300000],
+      ["2330", 2, 3300000],
+      ["2317", 1, 500000],
+    ]);
+    expect(groups.find((group) => group.stockId === "2330")?.events.map((item) => item.etfId)).toEqual([
+      "B",
+      "A",
+    ]);
+  });
+
+  it("switches group order to the largest single-event impact before ETF count", () => {
+    const groups = groupChangeWall(events, "build_exit", "tw", "single_impact");
+
+    expect(groups.map((group) => group.stockId)).toEqual(["2454", "2317", "2330"]);
+  });
+
+  it("keeps the market and event-tab scopes independent", () => {
+    expect(groupChangeWall(events, "build_exit", "overseas", "etf_count").map((group) => group.stockId)).toEqual([
+      "MRVL US",
+    ]);
+    expect(groupChangeWall(events, "add_trim", "tw", "etf_count").map((group) => group.stockId)).toEqual([
+      "2330",
+    ]);
   });
 });

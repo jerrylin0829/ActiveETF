@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatLots,
+  formatLotsWithUnit,
   formatPct,
   formatSignedPct,
   formatStockLabel,
@@ -25,6 +26,17 @@ describe("format", () => {
   });
   it("股數轉張數千分位", () => {
     expect(formatLots(1234000)).toBe("1,234");
+  });
+
+  it("台股股數轉為帶正負號的張數", () => {
+    expect(formatLotsWithUnit(4800000, "tw")).toBe("+4,800 張");
+    expect(formatLotsWithUnit(-3600000, "tw")).toBe("-3,600 張");
+    expect(formatLotsWithUnit(0, "tw")).toBe("+0 張");
+  });
+
+  it("海外股數保留股數並標示股", () => {
+    expect(formatLotsWithUnit(1120, "overseas")).toBe("+1,120 股");
+    expect(formatLotsWithUnit(-950, "overseas")).toBe("-950 股");
   });
 });
 

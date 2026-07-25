@@ -18,6 +18,16 @@ export function formatLots(shares: number): string {
   return Math.round(shares / 1000).toLocaleString("zh-TW");
 }
 
+export function formatLotsWithUnit(
+  shares: number,
+  market: "tw" | "overseas",
+): string {
+  const quantity = Math.round(market === "tw" ? shares / 1000 : shares);
+  const sign = quantity >= 0 ? "+" : "";
+  const unit = market === "tw" ? "張" : "股";
+  return `${sign}${quantity.toLocaleString("zh-TW")} ${unit}`;
+}
+
 // 海外持股代號採 Bloomberg 式「代號 交易所」後綴；stock_info 只有台股，
 // 因此以空格加兩個大寫字母的結尾判別市場。
 export function stockMarket(stockId: string): "tw" | "overseas" {
