@@ -5,12 +5,16 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { formatStockLabel } from "@/lib/format";
 import {
-  filterChangeWall,
-  formatSharesDelta,
+  formatLotsWithUnit,
+  formatStockLabel,
+  stockMarket,
+} from "@/lib/format";
+import {
   formatWeightDelta,
+  groupChangeWall,
   type ChangeEvent,
+  type ChangeWallSort,
   type ChangeWallTab,
   type MarketFilter,
 } from "@/lib/today-overview";
@@ -31,6 +35,11 @@ const tabs: Array<{ value: ChangeWallTab; label: string }> = [
 const markets: Array<{ value: MarketFilter; label: string }> = [
   { value: "tw", label: "台股" },
   { value: "overseas", label: "海外" },
+];
+
+const sorts: Array<{ value: ChangeWallSort; label: string }> = [
+  { value: "etf_count", label: "ETF 檔數" },
+  { value: "single_impact", label: "單筆幅度" },
 ];
 
 const visibleLimit = 5;
@@ -83,14 +92,15 @@ function SegmentedControl<T extends string>({
 export function ChangeWall({ events }: { events: ChangeEvent[] }) {
   const [tab, setTab] = useState<ChangeWallTab>("build_exit");
   const [market, setMarket] = useState<MarketFilter>("tw");
+  const [sort, setSort] = useState<ChangeWallSort>("etf_count");
   const [expanded, setExpanded] = useState(false);
 
-  const filtered = useMemo(
-    () => filterChangeWall(events, tab, market),
-    [events, market, tab],
+  const groups = useMemo(
+    () => groupChangeWall(events, tab, market, sort),
+    [events, market, sort, tab],
   );
-  const visible = expanded ? filtered : filtered.slice(0, visibleLimit);
-  const hiddenCount = filtered.length - visibleLimit;
+  const visible = expanded ? groups : groups.slice(0, visibleLimit);
+  const hiddenCount = groups.length - visibleLimit;
 
   return (
     <section aria-labelledby="change-wall-title" className="min-w-0 space-y-3">
@@ -107,81 +117,122 @@ export function ChangeWall({ events }: { events: ChangeEvent[] }) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-3">
+          <SegmentedControl
+            label="事件類型"
+            options={tabs}
+            value={tab}
+            onChange={(nextTab) => {
+              setTab(nextTab);
+              setExpanded(false);
+            }}
+          />
+          <SegmentedControl
+            label="市場"
+            options={markets}
+            value={market}
+            onChange={(nextMarket) => {
+              setMarket(nextMarket);
+              setExpanded(false);
+            }}
+          />
+        </div>
         <SegmentedControl
-          label="事件類型"
-          options={tabs}
-          value={tab}
-          onChange={(nextTab) => {
-            setTab(nextTab);
-            setExpanded(false);
-          }}
-        />
-        <SegmentedControl
-          label="市場"
-          options={markets}
-          value={market}
-          onChange={(nextMarket) => {
-            setMarket(nextMarket);
+          label="排序"
+          options={sorts}
+          value={sort}
+          onChange={(nextSort) => {
+            setSort(nextSort);
             setExpanded(false);
           }}
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="rounded-md border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
           此分類當日無異動。
         </div>
       ) : (
         <div className="overflow-hidden rounded-md border border-border bg-card">
-          <div className="divide-y divide-border">
-            {visible.map((event) => (
-              <article
-                key={`${event.etfId}-${event.stockId}-${event.changeType}`}
-                data-testid="change-row"
-                className="grid gap-3 px-4 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_8rem_8rem] sm:items-center"
-              >
-                <div>
-                  <Badge variant="outline" className={badgeTone(event.changeType)}>
-                    {changeLabels[event.changeType]}
-                  </Badge>
-                </div>
-                <div className="min-w-0">
-                  <Link
-                    href={`/stock/${encodeURIComponent(event.stockId)}`}
-                    className="rounded-sm font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {formatStockLabel(event.stockId, event.stockName)}
-                  </Link>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    <Link
-                      href={`/etf/${encodeURIComponent(event.etfId)}`}
-                      className="rounded-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {event.etfId} {event.etfName}
-                    </Link>
-                  </div>
-                </div>
-                <div
-                  className={cn(
-                    "font-mono text-sm font-semibold tabular-nums",
-                    changeTone(event.changeType),
-                  )}
-                >
-                  {formatSharesDelta(event.sharesDelta)}
-                </div>
-                <div
-                  className={cn(
-                    "font-mono text-sm font-semibold tabular-nums",
-                    changeTone(event.changeType),
-                  )}
-                >
-                  {formatWeightDelta(event.weightDeltaPct)}
-                </div>
-              </article>
-            ))}
+          <div className="grid grid-cols-[minmax(0,1fr)_6.5rem_5.25rem] gap-3 border-b border-border bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
+            <span>股票 · 異動 ETF</span>
+            <span className="text-right">股數</span>
+            <span className="text-right">比例</span>
           </div>
 
-          {filtered.length > visibleLimit ? (
+          <div className="divide-y divide-border">
+            {visible.map((group) => {
+              const groupMarket = stockMarket(group.stockId);
+              return (
+                <article key={group.stockId} data-testid="change-group">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 bg-muted/25 px-4 py-3">
+                    <Link
+                      href={`/stock/${encodeURIComponent(group.stockId)}`}
+                      className="rounded-sm font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {formatStockLabel(group.stockId, group.stockName)}
+                    </Link>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {group.etfCount} 檔 ETF · 合計{" "}
+                      <span
+                        className={cn(
+                          "font-mono font-semibold tabular-nums",
+                          group.totalSharesDelta >= 0
+                            ? "text-[var(--market-up)]"
+                            : "text-[var(--market-down)]",
+                        )}
+                      >
+                        {formatLotsWithUnit(group.totalSharesDelta, groupMarket)}
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-border/70">
+                    {group.events.map((event) => (
+                      <div
+                        key={`${event.etfId}-${event.stockId}-${event.changeType}`}
+                        data-testid="change-row"
+                        className="grid grid-cols-[minmax(0,1fr)_6.5rem_5.25rem] items-center gap-3 px-4 py-3"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={cn("shrink-0", badgeTone(event.changeType))}
+                          >
+                            {changeLabels[event.changeType]}
+                          </Badge>
+                          <Link
+                            href={`/etf/${encodeURIComponent(event.etfId)}`}
+                            className="min-w-0 rounded-sm text-sm font-medium leading-snug hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {event.etfId} {event.etfName}
+                          </Link>
+                        </div>
+                        <div
+                          className={cn(
+                            "text-right font-mono text-sm font-semibold tabular-nums",
+                            changeTone(event.changeType),
+                          )}
+                        >
+                          {formatLotsWithUnit(event.sharesDelta, groupMarket)}
+                        </div>
+                        <div
+                          className={cn(
+                            "text-right font-mono text-sm font-semibold tabular-nums",
+                            changeTone(event.changeType),
+                          )}
+                        >
+                          {formatWeightDelta(event.weightDeltaPct)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {groups.length > visibleLimit ? (
             <button
               type="button"
               onClick={() => setExpanded((current) => !current)}
@@ -202,6 +253,10 @@ export function ChangeWall({ events }: { events: ChangeEvent[] }) {
           ) : null}
         </div>
       )}
+
+      <p className="text-xs text-muted-foreground">
+        台股股數以張、海外股數以股顯示；比例為單一 ETF 的持股權重變化。
+      </p>
     </section>
   );
 }

@@ -91,7 +91,7 @@ describe("TodayOverviewDashboard", () => {
 
     expect(screen.getByRole("heading", { name: "異動牆" })).toBeInTheDocument();
     expect(screen.getByText("NEW")).toBeInTheDocument();
-    expect(screen.getByText("+12,000")).toBeInTheDocument();
+    expect(screen.getAllByText("+12 張")).toHaveLength(2);
     expect(screen.getByRole("link", { name: /00980A 主動野村臺灣優選/ })).toHaveAttribute(
       "href",
       "/etf/00980A",
