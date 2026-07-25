@@ -28,8 +28,8 @@ Planner：Claude Code ｜ 日期：2026-07-25 ｜ 目標分支前綴：`codex/`
   | 轉換 | 事件 |
   |---|---|
   | 無 → 觀察部位 | 無事件（權重變化 0 < 0.05pp，既有門檻自然擋掉） |
-  | 觀察部位 → 實質部位 | **NEW** |
-  | 實質部位 → 觀察部位 | **EXIT** |
+| 觀察部位 → 實質部位 | 股數有變且 `abs(Δweight) >= 0.05pp` 時為 **NEW** |
+| 實質部位 → 觀察部位 | 股數有變且 `abs(Δweight) >= 0.05pp` 時為 **EXIT** |
   | 觀察部位 → 無 | 無事件 |
   | 實質 → 實質 | ADD / TRIM（不變） |
 - ✅ **交集表只計實質部位**（User 裁決 A）：`cross_holdings_daily.etf_count` 排除觀察部位；明細展開時另行顯示「另有 N 檔為觀察部位」
@@ -51,7 +51,7 @@ def _is_observation(h: Holding) -> bool:
     return h.weight_pct == 0
 ```
 
-判定改為「把觀察部位視同不存在」：`p is None or _is_observation(p)` 且 `not _is_observation(h)` → NEW；`p` 為實質而 `h` 為觀察 → EXIT；兩端皆為觀察 → 無事件。既有的 ADD/TRIM 門檻（`ds != 0 and abs(dw) >= 0.05`）僅套用於兩端皆為實質部位的情況。
+判定改為「把觀察部位視同不存在」：`p is None or _is_observation(p)` 且 `not _is_observation(h)` 的候選事件類型為 NEW；`p` 為實質而 `h` 為觀察的候選事件類型為 EXIT；兩端皆為觀察則無事件。觀察／實質跨界與既有 ADD/TRIM 一樣，皆須 `ds != 0 and abs(dw) >= 0.05` 才實際記事件，避免同股數的上游四捨五入製造假進出。
 
 ### 3. `scraper/src/activeetf/db.py::refresh_daily_aggregates`
 
@@ -90,7 +90,7 @@ def _is_observation(h: Holding) -> bool:
 ## Acceptance Criteria
 
 - `uv run pytest`、`npm test`、`tsc --noEmit`、`lint`、`build` 全過
-- `diff.py` 測試涵蓋五種轉換（無→觀察、觀察→實質=NEW、實質→觀察=EXIT、觀察→無、實質→實質）；**特別驗證觀察→實質產生 NEW 而非 ADD**
+- `diff.py` 測試涵蓋五種轉換（無→觀察、觀察→實質=NEW、實質→觀察=EXIT、觀察→無、實質→實質）；**特別驗證觀察→實質產生 NEW 而非 ADD**，以及同股數或 `abs(Δweight) < 0.05pp` 的跨界不產生事件
 - adapter 測試：以含 0 權重列的 fixture 驗證該列被保留且 `weight_pct == 0`
 - `refresh_daily_aggregates` 測試：觀察部位不計入 `etf_count`
 - 真資料驗收：00981A 抓取後持股數為 51（非 37）、權重合計仍 93.72%、`scrape_log` 為 ok
