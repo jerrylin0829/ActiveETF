@@ -121,3 +121,70 @@ def test_rebuild_holding_changes_replays_all_snapshot_dates(monkeypatch):
         (dates[2], "TRIM"),
         (dates[4], "EXIT"),
     ]
+
+
+def test_main_logs_validation_failure_without_writing_snapshot(monkeypatch):
+    trade_date = dt.date(2026, 6, 15)
+    entry = SimpleNamespace(
+        etf_id="00981A",
+        adapter="uni",
+        universe="tw",
+    )
+    module = SimpleNamespace(
+        fetch_at=lambda *_args: [Holding("2330", 1000, 5.0)]
+    )
+    writes = []
+    logs = []
+
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _entries: ({"00981A": (entry, module)}, []),
+    )
+    monkeypatch.setattr(backfill_history, "_today", lambda: trade_date)
+    monkeypatch.setattr(
+        backfill_history.db,
+        "etf_listing_dates",
+        lambda _ids: {"00981A": trade_date},
+    )
+    monkeypatch.setattr(
+        backfill_history.db,
+        "benchmark_trading_dates",
+        lambda _start, _end: [trade_date],
+    )
+    monkeypatch.setattr(
+        backfill_history.db,
+        "existing_snapshot_keys",
+        lambda _ids: set(),
+    )
+    monkeypatch.setattr(
+        backfill_history.db,
+        "known_stock_ids",
+        lambda: {"2330"},
+    )
+    monkeypatch.setattr(
+        backfill_history.db,
+        "latest_snapshot_date",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        backfill_history.db,
+        "write_snapshot",
+        lambda *args: writes.append(args),
+    )
+    monkeypatch.setattr(
+        backfill_history.db,
+        "log_scrape",
+        lambda *args: logs.append(args),
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "rebuild_holding_changes",
+        lambda _etf_ids: None,
+    )
+
+    backfill_history.main()
+
+    assert writes == []
+    assert logs[0][:3] == ("00981A", trade_date, "fail")
+    assert "ValidationError" in logs[0][3]
