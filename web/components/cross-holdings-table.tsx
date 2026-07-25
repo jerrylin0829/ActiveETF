@@ -2,8 +2,10 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -55,7 +57,7 @@ function ExpandedDetailRows({
   details: CrossDetail[];
 }) {
   const materialDetails = details.filter((detail) => detail.weightPct > 0);
-  const observationCount = details.length - materialDetails.length;
+  const observationCount = details.filter((detail) => detail.weightPct === 0).length;
 
   return (
     <>
@@ -97,6 +99,10 @@ export function CrossHoldingsTable({ rows, details }: CrossHoldingsTableProps) {
   const [industry, setIndustry] = useState<string>("");
   const [changedOnly, setChangedOnly] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  function toggleExpanded(stockId: string) {
+    setExpanded((current) => current === stockId ? null : stockId);
+  }
 
   const industries = useMemo(() => [...new Set(rows.map((r) => r.industry))].sort(), [rows]);
   const visible = useMemo(() => {
@@ -189,18 +195,42 @@ export function CrossHoldingsTable({ rows, details }: CrossHoldingsTableProps) {
                 <TableRow
                   data-testid="cross-row"
                   className="cursor-pointer"
-                  onClick={() => setExpanded(expanded === r.stockId ? null : r.stockId)}
+                  onClick={() => toggleExpanded(r.stockId)}
                 >
                   <TableCell>
-                    <Link
-                      href={`/stock/${encodeURIComponent(r.stockId)}`}
-                      onClick={(event) => event.stopPropagation()}
-                      className="inline-flex flex-wrap items-baseline gap-x-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="font-mono font-semibold tabular-nums hover:text-primary">
-                        {formatStockLabel(r.stockId, r.stockName)}
-                      </span>
-                    </Link>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`${expanded === r.stockId ? "收合" : "展開"} ${r.stockId} 持有明細`}
+                        aria-expanded={expanded === r.stockId}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleExpanded(r.stockId);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          toggleExpanded(r.stockId);
+                        }}
+                      >
+                        <ChevronRight
+                          className={expanded === r.stockId ? "rotate-90" : undefined}
+                          aria-hidden="true"
+                        />
+                      </Button>
+                      <Link
+                        href={`/stock/${encodeURIComponent(r.stockId)}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex flex-wrap items-baseline gap-x-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="font-mono font-semibold tabular-nums hover:text-primary">
+                          {formatStockLabel(r.stockId, r.stockName)}
+                        </span>
+                      </Link>
+                    </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">{r.industry}</TableCell>
                   <TableCell className="tabular-nums">{r.etfCount}</TableCell>

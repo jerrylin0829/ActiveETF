@@ -181,4 +181,27 @@ describe("industry and history helpers", () => {
       "US1",
     ]);
   });
+
+  it("keeps observation positions last for both weight sort directions", () => {
+    const observation: EtfHoldingRow = {
+      ...holdingRows[1],
+      stockId: "3008",
+      stockName: "大立光",
+      weightPct: 0,
+    };
+    const mixedRows = [...holdingRows, observation];
+
+    expect(sortHoldingRows(mixedRows, "weightPct", "asc").map((row) => row.stockId)).toEqual([
+      "US1",
+      "2454",
+      "2330",
+      "3008",
+    ]);
+    expect(sortHoldingRows(mixedRows, "weightPct", "desc").map((row) => row.stockId)).toEqual([
+      "2330",
+      "2454",
+      "US1",
+      "3008",
+    ]);
+  });
 });

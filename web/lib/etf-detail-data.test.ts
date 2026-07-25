@@ -416,4 +416,63 @@ describe("fetchEtfDetail", () => {
     expect(result.detail.holdings[0].stockName).toBe(result.detail.holdings[0].stockId);
     expect(result.detail.error).toContain("stock_info unavailable");
   });
+
+  it("excludes invalid weights with a warning but preserves a real zero weight", async () => {
+    const snapshots = baseDatasets().holdings_snapshot.filter(
+      (record) => !(record.trade_date === dates[0] && record.stock_id === "2330"),
+    );
+    snapshots.push(
+      {
+        etf_id: "00981A",
+        trade_date: dates[0],
+        stock_id: "2330",
+        shares: 2_000,
+        weight_pct: "NaN",
+      },
+      {
+        etf_id: "00981A",
+        trade_date: dates[0],
+        stock_id: "2454",
+        shares: 1_000,
+        weight_pct: null,
+      },
+      {
+        etf_id: "00981A",
+        trade_date: dates[0],
+        stock_id: "2603",
+        shares: 1_000,
+        weight_pct: "",
+      },
+      {
+        etf_id: "00981A",
+        trade_date: dates[0],
+        stock_id: "3008",
+        shares: 1_000,
+        weight_pct: 0,
+      },
+    );
+    installSupabaseDouble({
+      holdings_snapshot: snapshots,
+      stock_info: [
+        ...baseDatasets().stock_info,
+        { stock_id: "2454", name: "聯發科", industry: "半導體業" },
+        { stock_id: "2603", name: "長榮", industry: "航運業" },
+        { stock_id: "3008", name: "大立光", industry: "光電業" },
+      ],
+    });
+
+    const result = await fetchEtfDetail("00981A");
+
+    expect(result.found).toBe(true);
+    if (!result.found) return;
+    expect(result.detail.holdings.map((holding) => holding.stockId)).toContain("3008");
+    expect(result.detail.holdings.find((holding) => holding.stockId === "3008")?.weightPct).toBe(0);
+    expect(result.detail.holdings.map((holding) => holding.stockId)).not.toContain("2330");
+    expect(result.detail.holdings.map((holding) => holding.stockId)).not.toContain("2454");
+    expect(result.detail.holdings.map((holding) => holding.stockId)).not.toContain("2603");
+    expect(result.detail.warnings).toContainEqual({
+      title: "持股權重資料無效",
+      description: expect.stringContaining(`${dates[0]}：2330、2454、2603`),
+    });
+  });
 });
