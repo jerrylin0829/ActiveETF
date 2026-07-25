@@ -6,18 +6,44 @@ from activeetf.models import Holding, Change
 
 WEIGHT_DELTA_MIN_PP = 0.05
 
+
+def _is_observation(holding: Holding) -> bool:
+    return holding.weight_pct == 0
+
+
 def diff_snapshots(prev: dict[str, Holding], curr: dict[str, Holding]) -> list[Change]:
     changes: list[Change] = []
     for sid, h in curr.items():
         p = prev.get(sid)
+        if _is_observation(h):
+            if p is not None and not _is_observation(p):
+                changes.append(
+                    Change(
+                        sid,
+                        "EXIT",
+                        h.shares - p.shares,
+                        h.weight_pct - p.weight_pct,
+                    )
+                )
+            continue
         if p is None:
             changes.append(Change(sid, "NEW", h.shares, h.weight_pct))
+            continue
+        if _is_observation(p):
+            changes.append(
+                Change(
+                    sid,
+                    "NEW",
+                    h.shares - p.shares,
+                    h.weight_pct - p.weight_pct,
+                )
+            )
             continue
         ds = h.shares - p.shares
         dw = h.weight_pct - p.weight_pct
         if ds != 0 and abs(dw) >= WEIGHT_DELTA_MIN_PP:
             changes.append(Change(sid, "ADD" if ds > 0 else "TRIM", ds, dw))
     for sid, p in prev.items():
-        if sid not in curr:
+        if sid not in curr and not _is_observation(p):
             changes.append(Change(sid, "EXIT", -p.shares, -p.weight_pct))
     return sorted(changes, key=lambda c: c.stock_id)

@@ -1,4 +1,4 @@
-from activeetf.models import Holding
+from activeetf.models import Change, Holding
 from activeetf.diff import diff_snapshots
 
 def _snap(*rows):
@@ -28,3 +28,43 @@ def test_deltas_are_signed():
     curr = _snap(("2330", 1500, 50.4))
     c = diff_snapshots(prev, curr)[0]
     assert c.shares_delta == 500 and abs(c.weight_delta_pct - 0.4) < 1e-9
+
+
+def test_new_observation_does_not_emit_event():
+    assert diff_snapshots({}, _snap(("2330", 1_000, 0))) == []
+
+
+def test_observation_becoming_material_is_new_with_actual_delta():
+    changes = diff_snapshots(
+        _snap(("2330", 1_000, 0)),
+        _snap(("2330", 5_000, 1.2)),
+    )
+
+    assert changes == [
+        Change(
+            stock_id="2330",
+            change_type="NEW",
+            shares_delta=4_000,
+            weight_delta_pct=1.2,
+        )
+    ]
+
+
+def test_material_becoming_observation_is_exit_with_actual_delta():
+    changes = diff_snapshots(
+        _snap(("2330", 5_000, 1.2)),
+        _snap(("2330", 1_000, 0)),
+    )
+
+    assert changes == [
+        Change(
+            stock_id="2330",
+            change_type="EXIT",
+            shares_delta=-4_000,
+            weight_delta_pct=-1.2,
+        )
+    ]
+
+
+def test_removed_observation_does_not_emit_event():
+    assert diff_snapshots(_snap(("2330", 1_000, 0)), {}) == []
