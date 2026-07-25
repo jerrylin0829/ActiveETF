@@ -305,6 +305,11 @@ def build_rounds(events: list[tuple]) -> list[Round]:
     return rounds
 
 
+def open_round_stock_ids(events: list[tuple]) -> set[str]:
+    """Stocks with any scoring round that has not received a later EXIT."""
+    return {round_.stock_id for round_ in build_rounds(events) if round_.exit is None}
+
+
 def _window_return(s: Series, start: dt.date, end: dt.date) -> float | None:
     a, b = _at_or_before(s, start), _at_or_before(s, end)
     if a is None or b is None or a[1] == 0:
@@ -370,22 +375,7 @@ def score_rounds(
 
 
 def picking_win_rate(etf_id: str, today: dt.date, tri: Series) -> dict:
-    with db.conn() as c:
-        events = c.execute(
-            """
-            select hc.trade_date, hc.stock_id, hc.change_type, hc.shares_delta,
-                   coalesce(hs.shares, 0)
-            from holding_change hc
-            left join holdings_snapshot hs
-              on hs.etf_id = hc.etf_id and hs.stock_id = hc.stock_id
-             and hs.trade_date = (select max(trade_date) from holdings_snapshot
-                                  where etf_id = hc.etf_id and stock_id = hc.stock_id
-                                    and trade_date < hc.trade_date)
-            where hc.etf_id = %s
-            """,
-            (etf_id,),
-        ).fetchall()
-    rounds = build_rounds([tuple(e) for e in events])
+    rounds = build_rounds(db.scoring_events(etf_id))
     tw_ids = db.known_stock_ids()
     needed = {r.stock_id for r in rounds if r.stock_id in tw_ids}
     start = min((r.entry for r in rounds), default=today)

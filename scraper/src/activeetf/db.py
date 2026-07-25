@@ -68,24 +68,29 @@ def write_changes(etf_id: str, d: dt.date, changes: list[Change]) -> None:
              for ch in changes])
 
 
-def open_new_stock_ids(etf_id: str, before: dt.date) -> set[str]:
-    """Stocks whose latest NEW/EXIT event before the date is NEW."""
+def scoring_events(etf_id: str, before: dt.date | None = None) -> list[tuple]:
+    """Holding changes with prior shares, ready for metrics.build_rounds()."""
     with conn() as c:
         rows = c.execute(
             """
-            select stock_id
-            from (
-                select distinct on (stock_id) stock_id, change_type
-                from holding_change
-                where etf_id = %s and trade_date < %s
-                  and change_type in ('NEW', 'EXIT')
-                order by stock_id, trade_date desc
-            ) latest
-            where change_type = 'NEW'
+            select hc.trade_date, hc.stock_id, hc.change_type, hc.shares_delta,
+                   coalesce(hs.shares, 0)
+            from holding_change hc
+            left join holdings_snapshot hs
+              on hs.etf_id = hc.etf_id and hs.stock_id = hc.stock_id
+             and hs.trade_date = (
+                 select max(trade_date)
+                 from holdings_snapshot
+                 where etf_id = hc.etf_id and stock_id = hc.stock_id
+                   and trade_date < hc.trade_date
+             )
+            where hc.etf_id = %s
+              and (%s::date is null or hc.trade_date < %s::date)
+            order by hc.trade_date, hc.stock_id
             """,
-            (etf_id, before),
+            (etf_id, before, before),
         ).fetchall()
-    return {row[0] for row in rows}
+    return [tuple(row) for row in rows]
 
 
 def upsert_prices(rows: list[tuple]) -> None:

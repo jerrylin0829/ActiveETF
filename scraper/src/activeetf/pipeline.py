@@ -15,7 +15,7 @@ class Deps:
     load_snapshot = staticmethod(db.load_snapshot)
     write_snapshot = staticmethod(db.write_snapshot)
     write_changes = staticmethod(db.write_changes)
-    open_new_stock_ids = staticmethod(db.open_new_stock_ids)
+    scoring_events = staticmethod(db.scoring_events)
     known_stock_ids = staticmethod(db.known_stock_ids)
     log_scrape = staticmethod(db.log_scrape)
     @staticmethod
@@ -36,7 +36,9 @@ def scrape_one(entry: EtfEntry, today: dt.date, deps) -> None:
         if prev_date is not None:
             prev = deps.load_snapshot(entry.etf_id, prev_date)
             curr = {h.stock_id: h for h in holdings}
-            open_stock_ids = deps.open_new_stock_ids(entry.etf_id, before=today)
+            open_stock_ids = metrics.open_round_stock_ids(
+                deps.scoring_events(entry.etf_id, before=today)
+            )
             deps.write_changes(
                 entry.etf_id,
                 today,
