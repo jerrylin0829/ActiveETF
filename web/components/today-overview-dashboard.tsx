@@ -4,15 +4,11 @@ import { AlertCircle, ArrowDownRight, ArrowUpRight, Radar } from "lucide-react";
 import { ChangeWall } from "@/components/change-wall";
 import { DataGapAlerts } from "@/components/data-gap-alerts";
 import { DateSelector } from "@/components/date-selector";
-import { formatSignedPct, formatStockLabel } from "@/lib/format";
+import { formatSignedPct, formatStockLabel, formatYi } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { SiteNav } from "@/components/site-nav";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  formatWeightDelta,
-  type CollectiveMove,
-  type TodayOverviewViewModel,
-} from "@/lib/today-overview";
+import { type CollectiveMove, type TodayOverviewViewModel } from "@/lib/today-overview";
 import { cn } from "@/lib/utils";
 
 function EmptyState({ children }: { children: React.ReactNode }) {
@@ -62,7 +58,7 @@ function CollectiveList({
                 <div className="mt-1 text-xs text-muted-foreground">{item.etfCount} 檔 ETF</div>
               </div>
               <span className={cn("font-mono text-sm font-semibold tabular-nums", toneClass)}>
-                {formatWeightDelta(item.totalWeightDeltaPct)}
+                {formatYi(item.totalValueTwd)}
               </span>
             </li>
           ))}
@@ -78,7 +74,7 @@ function CollectiveMovements({ overview }: { overview: TodayOverviewViewModel })
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold">集體動向</h2>
-          <p className="mt-1 text-sm text-muted-foreground">依 ETF 檔數排序，再比合計權重變化。</p>
+          <p className="mt-1 text-sm text-muted-foreground">依 ETF 檔數排序，再比合計金額。</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {overview.rangeOptions.map((option) => (

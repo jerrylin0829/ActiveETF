@@ -14,13 +14,14 @@ export type ChangeEvent = {
   changeType: ChangeType;
   sharesDelta: number;
   weightDeltaPct: number;
+  close?: number | null;
 };
 
 export type CollectiveMove = {
   stockId: string;
   stockName: string;
   etfCount: number;
-  totalWeightDeltaPct: number;
+  totalValueTwd: number | null;
 };
 
 export type CollectiveMovements = {
@@ -115,6 +116,15 @@ export function sortChangeEvents(events: ChangeEvent[]): ChangeEvent[] {
 
 export type ChangeWallTab = "build_exit" | "add_trim";
 export type MarketFilter = "tw" | "overseas";
+export type ChangeWallSort = "etf_count" | "single_impact";
+
+export type ChangeWallGroup = {
+  stockId: string;
+  stockName: string;
+  etfCount: number;
+  totalSharesDelta: number;
+  events: ChangeEvent[];
+};
 
 const tabChangeTypes: Record<ChangeWallTab, ChangeType[]> = {
   build_exit: ["NEW", "EXIT"],
@@ -140,8 +150,61 @@ export function filterChangeWall(
     });
 }
 
-function roundWeight(value: number): number {
-  return Math.round(value * 10000) / 10000;
+export function groupChangeWall(
+  events: ChangeEvent[],
+  tab: ChangeWallTab,
+  market: MarketFilter,
+  sort: ChangeWallSort,
+): ChangeWallGroup[] {
+  const grouped = new Map<
+    string,
+    {
+      stockName: string;
+      etfIds: Set<string>;
+      totalSharesDelta: number;
+      events: ChangeEvent[];
+    }
+  >();
+
+  for (const event of filterChangeWall(events, tab, market)) {
+    const current = grouped.get(event.stockId) ?? {
+      stockName: event.stockName,
+      etfIds: new Set<string>(),
+      totalSharesDelta: 0,
+      events: [],
+    };
+    current.stockName = event.stockName;
+    current.etfIds.add(event.etfId);
+    current.totalSharesDelta += event.sharesDelta;
+    current.events.push(event);
+    grouped.set(event.stockId, current);
+  }
+
+  const groups = Array.from(grouped, ([stockId, value]) => ({
+    stockId,
+    stockName: value.stockName,
+    etfCount: value.etfIds.size,
+    totalSharesDelta: value.totalSharesDelta,
+    events: value.events,
+  }));
+  const largestImpact = (group: ChangeWallGroup) =>
+    Math.abs(group.events[0]?.weightDeltaPct ?? 0);
+
+  return groups.sort((a, b) => {
+    const primary =
+      sort === "etf_count"
+        ? b.etfCount - a.etfCount
+        : largestImpact(b) - largestImpact(a);
+    if (primary !== 0) {
+      return primary;
+    }
+
+    const secondary =
+      sort === "etf_count"
+        ? largestImpact(b) - largestImpact(a)
+        : b.etfCount - a.etfCount;
+    return secondary !== 0 ? secondary : a.stockId.localeCompare(b.stockId);
+  });
 }
 
 function sortCollectiveMoves(items: CollectiveMove[]): CollectiveMove[] {
@@ -151,9 +214,10 @@ function sortCollectiveMoves(items: CollectiveMove[]): CollectiveMove[] {
       return countDiff;
     }
 
-    const weightDiff = Math.abs(b.totalWeightDeltaPct) - Math.abs(a.totalWeightDeltaPct);
-    if (weightDiff !== 0) {
-      return weightDiff;
+    const valueDiff =
+      Math.abs(b.totalValueTwd ?? 0) - Math.abs(a.totalValueTwd ?? 0);
+    if (valueDiff !== 0) {
+      return valueDiff;
     }
 
     return a.stockId.localeCompare(b.stockId);
@@ -163,7 +227,12 @@ function sortCollectiveMoves(items: CollectiveMove[]): CollectiveMove[] {
 function aggregateMoves(events: ChangeEvent[], types: ChangeType[]): CollectiveMove[] {
   const grouped = new Map<
     string,
-    { stockName: string; etfIds: Set<string>; totalWeightDeltaPct: number }
+    {
+      stockName: string;
+      etfIds: Set<string>;
+      totalValueTwd: number;
+      hasMissingClose: boolean;
+    }
   >();
 
   for (const event of events) {
@@ -174,11 +243,16 @@ function aggregateMoves(events: ChangeEvent[], types: ChangeType[]): CollectiveM
     const current = grouped.get(event.stockId) ?? {
       stockName: event.stockName,
       etfIds: new Set<string>(),
-      totalWeightDeltaPct: 0,
+      totalValueTwd: 0,
+      hasMissingClose: false,
     };
     current.stockName = event.stockName;
     current.etfIds.add(event.etfId);
-    current.totalWeightDeltaPct += event.weightDeltaPct;
+    if (event.close === null || event.close === undefined || !Number.isFinite(event.close)) {
+      current.hasMissingClose = true;
+    } else {
+      current.totalValueTwd += event.sharesDelta * event.close;
+    }
     grouped.set(event.stockId, current);
   }
 
@@ -187,7 +261,7 @@ function aggregateMoves(events: ChangeEvent[], types: ChangeType[]): CollectiveM
       stockId,
       stockName: value.stockName,
       etfCount: value.etfIds.size,
-      totalWeightDeltaPct: roundWeight(value.totalWeightDeltaPct),
+      totalValueTwd: value.hasMissingClose ? null : value.totalValueTwd,
     })),
   ).slice(0, 10);
 }

@@ -32,7 +32,7 @@ const overview: TodayOverviewViewModel = {
         stockId: "2330",
         stockName: "台積電",
         etfCount: 2,
-        totalWeightDeltaPct: 0.74,
+        totalValueTwd: 2750000000,
       },
     ],
     decreases: [
@@ -40,7 +40,7 @@ const overview: TodayOverviewViewModel = {
         stockId: "2303",
         stockName: "聯電",
         etfCount: 1,
-        totalWeightDeltaPct: -0.31,
+        totalValueTwd: null,
       },
     ],
   },
