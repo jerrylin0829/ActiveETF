@@ -68,6 +68,26 @@ def write_changes(etf_id: str, d: dt.date, changes: list[Change]) -> None:
              for ch in changes])
 
 
+def open_new_stock_ids(etf_id: str, before: dt.date) -> set[str]:
+    """Stocks whose latest NEW/EXIT event before the date is NEW."""
+    with conn() as c:
+        rows = c.execute(
+            """
+            select stock_id
+            from (
+                select distinct on (stock_id) stock_id, change_type
+                from holding_change
+                where etf_id = %s and trade_date < %s
+                  and change_type in ('NEW', 'EXIT')
+                order by stock_id, trade_date desc
+            ) latest
+            where change_type = 'NEW'
+            """,
+            (etf_id, before),
+        ).fetchall()
+    return {row[0] for row in rows}
+
+
 def upsert_prices(rows: list[tuple]) -> None:
     """rows: (stock_id, trade_date, close, adj_close)"""
     with conn() as c, c.cursor() as cur:

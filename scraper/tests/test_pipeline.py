@@ -18,6 +18,19 @@ class FakeDeps:
         return {h.stock_id: h for h in self.snapshots.get((etf_id, d), [])}
     def write_snapshot(self, etf_id, d, hs): self.snapshots[(etf_id, d)] = hs
     def write_changes(self, etf_id, d, cs): self.changes[(etf_id, d)] = cs
+    def open_new_stock_ids(self, etf_id, before):
+        latest = {}
+        for (event_etf_id, trade_date), changes in sorted(self.changes.items()):
+            if event_etf_id != etf_id or trade_date >= before:
+                continue
+            for change in changes:
+                if change.change_type in {"NEW", "EXIT"}:
+                    latest[change.stock_id] = change.change_type
+        return {
+            stock_id
+            for stock_id, change_type in latest.items()
+            if change_type == "NEW"
+        }
     def known_stock_ids(self): return self.known
     def log_scrape(self, etf_id, d, status, error=None): self.logs.append((etf_id, d, status))
     # --- adapter ---
@@ -43,6 +56,41 @@ def test_happy_path_writes_snapshot_and_diff():
     types = {c.stock_id: c.change_type for c in deps.changes[("00992A", D2)]}
     assert types["2317"] == "NEW" and types["2454"] == "EXIT"
     assert deps.logs[-1][2] == "ok"
+
+
+def test_open_round_closes_when_observation_disappears():
+    deps = FakeDeps()
+    etf_id = "00992A"
+    dates = [dt.date(2026, 7, day) for day in range(1, 6)]
+    anchors = [
+        Holding("1101", 1_000, 25.0),
+        Holding("1102", 1_000, 25.0),
+        Holding("1103", 1_000, 25.0),
+    ]
+    deps.known = {"2330", "1101", "1102", "1103"}
+    deps.snapshots[(etf_id, dates[0])] = [
+        *anchors,
+        Holding("2330", 1, 0),
+    ]
+    states = [
+        Holding("2330", 1_000, 1.0),
+        Holding("2330", 100, 0.01),
+        Holding("2330", 1, 0),
+        None,
+    ]
+
+    for trade_date, state in zip(dates[1:], states):
+        deps.fetch_results[etf_id] = [*anchors] + ([] if state is None else [state])
+        pipeline.scrape_one(_entry(etf_id), trade_date, deps)
+
+    changes = [
+        change.change_type
+        for trade_date in dates[1:]
+        for change in deps.changes[(etf_id, trade_date)]
+        if change.stock_id == "2330"
+    ]
+    assert changes == ["NEW", "TRIM", "EXIT"]
+
 
 def test_validation_failure_writes_nothing():
     deps = FakeDeps()

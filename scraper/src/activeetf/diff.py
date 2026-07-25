@@ -19,7 +19,13 @@ def _passes_change_threshold(previous: Holding, current: Holding) -> bool:
     )
 
 
-def diff_snapshots(prev: dict[str, Holding], curr: dict[str, Holding]) -> list[Change]:
+def diff_snapshots(
+    prev: dict[str, Holding],
+    curr: dict[str, Holding],
+    *,
+    open_stock_ids: set[str] | None = None,
+) -> list[Change]:
+    open_stock_ids = open_stock_ids or set()
     changes: list[Change] = []
     for sid, h in curr.items():
         p = prev.get(sid)
@@ -44,6 +50,17 @@ def diff_snapshots(prev: dict[str, Holding], curr: dict[str, Holding]) -> list[C
         if _is_observation(p):
             if not _passes_change_threshold(p, h):
                 continue
+            if sid in open_stock_ids:
+                shares_delta = h.shares - p.shares
+                changes.append(
+                    Change(
+                        sid,
+                        "ADD" if shares_delta > 0 else "TRIM",
+                        shares_delta,
+                        h.weight_pct - p.weight_pct,
+                    )
+                )
+                continue
             changes.append(
                 Change(
                     sid,
@@ -58,6 +75,8 @@ def diff_snapshots(prev: dict[str, Holding], curr: dict[str, Holding]) -> list[C
         if _passes_change_threshold(p, h):
             changes.append(Change(sid, "ADD" if ds > 0 else "TRIM", ds, dw))
     for sid, p in prev.items():
-        if sid not in curr and not _is_observation(p):
+        if sid in curr:
+            continue
+        if not _is_observation(p) or sid in open_stock_ids:
             changes.append(Change(sid, "EXIT", -p.shares, -p.weight_pct))
     return sorted(changes, key=lambda c: c.stock_id)

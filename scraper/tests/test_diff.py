@@ -72,6 +72,36 @@ def test_removed_observation_does_not_emit_event():
     assert diff_snapshots(_snap(("2330", 1_000, 0)), {}) == []
 
 
+def test_removed_observation_closes_existing_new_round():
+    assert diff_snapshots(
+        _snap(("2330", 1_000, 0)),
+        {},
+        open_stock_ids={"2330"},
+    ) == [
+        Change(
+            stock_id="2330",
+            change_type="EXIT",
+            shares_delta=-1_000,
+            weight_delta_pct=0,
+        )
+    ]
+
+
+def test_open_round_returning_from_observation_is_not_new_again():
+    assert diff_snapshots(
+        _snap(("2330", 1_000, 0)),
+        _snap(("2330", 5_000, 1.2)),
+        open_stock_ids={"2330"},
+    ) == [
+        Change(
+            stock_id="2330",
+            change_type="ADD",
+            shares_delta=4_000,
+            weight_delta_pct=1.2,
+        )
+    ]
+
+
 @pytest.mark.parametrize(
     ("previous_weight", "current_weight"),
     [(0, 0.01), (0.01, 0)],
