@@ -112,12 +112,14 @@ def probe_ctbc(d: dt.date | None) -> list[Holding]:
                         json={"token": _TOKEN_SEED}, headers=h, timeout=30)
     tok.raise_for_status()
     token = _data(tok)["token"]
+    # token 必須同時放 query string 與 body，缺一即回空（2026-07-25 探測踩過的坑）
     r = requests.post(f"{_API_BASE}/etf/Buyback",
+                      params={"token": token},
                       json={"token": token, "FID": _FUND_IDS["00406A"],
                             "StartDate": (d or dt.date.today()).isoformat()},
                       headers=h, timeout=30)
     r.raise_for_status()
-    return ctbc.parse(r.json())
+    return ctbc.parse(_data(r))
 
 
 def probe_allianz(d: dt.date | None) -> list[Holding]:
@@ -161,6 +163,7 @@ PROBES = {
     "cathay（國泰）": ("00400A", probe_cathay, dt.date(2026, 3, 30), dt.date(2026, 4, 14)),
     "fsitc（第一金）": ("00994A", probe_fsitc, dt.date(2025, 12, 29), dt.date(2026, 1, 13)),
     "ctbc（中信）": ("00406A", probe_ctbc, dt.date(2026, 6, 2), dt.date(2026, 6, 16)),
+    # 註：非交易日（週末）所有家皆回空，探測請挑交易日執行
     "allianz（安聯）": ("00402A", probe_allianz, dt.date(2026, 6, 1), dt.date(2026, 6, 15)),
     "nomura（野村）": ("00980A", probe_nomura, dt.date(2025, 5, 16), dt.date(2025, 6, 16)),
 }

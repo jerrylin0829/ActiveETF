@@ -148,7 +148,7 @@ scraper/
 - 連兩場失敗 → 自動開 GitHub Issue 告警 + Dashboard 黃條
 - Supabase 免費層 7 天閒置暫停：每日寫入天然保活
 - **上線首日**：一次性回補各 ETF 上市日至今的股價/指數（報酬與擇時勝率即刻可算）；持股明細自上線日起累積
-  > 2026-07-25 修訂：原文稱「歷史 PCF 無法回補」，經實測推翻——**部分投信的 PCF API 支援指定歷史日期查詢**，該部分 ETF（目前 9 檔）已回補至上市日。上游無日期參數者仍僅有上線後資料；此不對稱由 `dashboard_etf_history_range` view 揭露並於前端標示。完整設計見 `2026-07-25-historical-backfill-design.md`
+  > 2026-07-25 修訂：原文稱「歷史 PCF 無法回補」，經實測推翻——**部分投信的 PCF API 支援指定歷史日期查詢**，該部分 ETF（目前 12 檔）已回補至上市日。上游無日期參數者仍僅有上線後資料；此不對稱由 `dashboard_etf_history_range` view 揭露並於前端標示。完整設計見 `2026-07-25-historical-backfill-design.md`
 
 ## 9. 錯誤處理總表
 
