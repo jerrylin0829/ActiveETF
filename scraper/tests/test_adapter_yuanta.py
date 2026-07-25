@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -55,3 +56,26 @@ def test_fetch_calls_official_pcf_api(monkeypatch):
             },
         )
     ]
+
+
+def test_fetch_at_sends_compact_date(monkeypatch):
+    captured = {}
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return json.loads(FIXTURE.read_text())
+
+    def fake_get(url, *, headers, params, timeout):
+        captured.update(params)
+        return Resp()
+
+    monkeypatch.setattr(yuanta.requests, "get", fake_get)
+
+    holdings = yuanta.fetch_at(by_id("00990A"), dt.date(2026, 6, 15))
+
+    assert captured["ndate"] == "20260615"
+    assert captured["ticker"] == "00990A"
+    assert holdings[0].stock_id

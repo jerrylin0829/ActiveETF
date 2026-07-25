@@ -1,4 +1,6 @@
 """元大投信 PCF adapter."""
+import datetime as dt
+
 import requests
 
 from activeetf.adapters.base import UA
@@ -24,8 +26,8 @@ def parse(payload: dict) -> list[Holding]:
     return holdings
 
 
-def fetch(entry: EtfEntry) -> list[Holding]:
-    params = {
+def _params(entry: EtfEntry, date: dt.date | None) -> dict:
+    return {
         "APIType": "ETFAPI",
         "CompanyName": "YUANTAFUNDS",
         "PageName": f"/tradeInfo/pcf/{entry.etf_id}",
@@ -35,8 +37,21 @@ def fetch(entry: EtfEntry) -> list[Holding]:
         "Device": "3",
         "Platform": "ETF",
         "ticker": entry.etf_id,
-        "ndate": "",
+        "ndate": date.strftime("%Y%m%d") if date else "",
     }
-    response = requests.get(_API_URL, headers=UA, params=params, timeout=30)
+
+
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
+    response = requests.get(
+        _API_URL, headers=UA, params=_params(entry, date), timeout=30
+    )
     response.raise_for_status()
     return parse(response.json())
+
+
+def fetch(entry: EtfEntry) -> list[Holding]:
+    return _fetch_pcf(entry, None)
+
+
+def fetch_at(entry: EtfEntry, date: dt.date) -> list[Holding]:
+    return _fetch_pcf(entry, date)
