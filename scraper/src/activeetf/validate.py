@@ -1,4 +1,6 @@
 """入庫前三道驗證（spec §5）。任一不過 = 整檔不寫入。錯資料比缺資料危險。"""
+import math
+
 from activeetf.models import Holding
 
 WEIGHT_SUM_MIN, WEIGHT_SUM_MAX = 70.0, 101.0   # 現金部位會吃掉一些權重
@@ -11,6 +13,16 @@ def validate(holdings: list[Holding], prev_count: int | None,
              known_ids: set[str], universe: str) -> None:
     if not holdings:
         raise ValidationError("empty holdings")
+    invalid_weights = []
+    for holding in holdings:
+        try:
+            valid = math.isfinite(holding.weight_pct) and holding.weight_pct >= 0
+        except TypeError:
+            valid = False
+        if not valid:
+            invalid_weights.append(holding.stock_id)
+    if invalid_weights:
+        raise ValidationError(f"invalid weight_pct: {invalid_weights[:5]}")
     total = sum(h.weight_pct for h in holdings)
     if not (WEIGHT_SUM_MIN <= total <= WEIGHT_SUM_MAX):
         raise ValidationError(f"weight sum {total:.2f} outside [{WEIGHT_SUM_MIN},{WEIGHT_SUM_MAX}]")

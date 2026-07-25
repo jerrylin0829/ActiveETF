@@ -21,6 +21,15 @@ def test_rejects_weight_sum_out_of_range():
     with pytest.raises(ValidationError, match="weight sum"):
         validate([_h("2330", 60), _h("2317", 60)], prev_count=2, known_ids=KNOWN, universe="tw")  # 120 > 101
 
+
+@pytest.mark.parametrize("weight", [-5.0, float("nan"), None])
+def test_rejects_negative_non_finite_and_missing_weight(weight):
+    holdings = [_h("2330", weight), _h("2317", 80)]
+
+    with pytest.raises(ValidationError, match="invalid weight"):
+        validate(holdings, prev_count=2, known_ids=KNOWN, universe="tw")
+
+
 def test_rejects_count_collapse():
     hs = [_h("2330", 80)]
     with pytest.raises(ValidationError, match="count"):

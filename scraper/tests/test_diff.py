@@ -1,3 +1,5 @@
+import pytest
+
 from activeetf.models import Change, Holding
 from activeetf.diff import diff_snapshots
 
@@ -68,3 +70,30 @@ def test_material_becoming_observation_is_exit_with_actual_delta():
 
 def test_removed_observation_does_not_emit_event():
     assert diff_snapshots(_snap(("2330", 1_000, 0)), {}) == []
+
+
+@pytest.mark.parametrize(
+    ("previous_weight", "current_weight"),
+    [(0, 0.01), (0.01, 0)],
+)
+def test_observation_boundary_requires_share_change(previous_weight, current_weight):
+    assert diff_snapshots(
+        _snap(("2330", 1_000, previous_weight)),
+        _snap(("2330", 1_000, current_weight)),
+    ) == []
+
+
+@pytest.mark.parametrize(
+    ("previous_shares", "previous_weight", "current_shares", "current_weight"),
+    [(1_000, 0, 2_000, 0.04), (2_000, 0.04, 1_000, 0)],
+)
+def test_observation_boundary_requires_weight_threshold(
+    previous_shares,
+    previous_weight,
+    current_shares,
+    current_weight,
+):
+    assert diff_snapshots(
+        _snap(("2330", previous_shares, previous_weight)),
+        _snap(("2330", current_shares, current_weight)),
+    ) == []
