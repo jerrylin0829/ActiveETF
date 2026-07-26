@@ -55,6 +55,8 @@ PR 切分建議：Task 1–8（adapter + 腳本）、Task 9–11（view + 前端
 - 最終統計分列已有快照跳過、validation failure 與 fetch failure
 - event rebuild unit test 驗證 lock/read/delete/insert 順序，真 Supabase `_T` integration 驗證成功 replace 與 constraint failure rollback
 - 超過 250 筆舊交易日回補 log 時，近期每日 failure 仍出現在 Dashboard 黃條
+- 正式回補前先執行 `uv run python scripts/backfill_history.py --etf-id 00990A --date 2025-12-15`；此 canary 不重建全歷史 `holding_change`
+- 完整 `uv run python scripts/backfill_history.py` 只能在 canary、migration 與 pipeline 閒置確認後執行
 - 回補腳本可通過語法與匯入檢查（不實際執行）
 
 ## Required Verification

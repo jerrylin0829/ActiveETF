@@ -84,6 +84,51 @@ def test_benchmark_trading_dates_uses_price_cache_window(monkeypatch):
     assert "'-Infinity'::numeric" in connection.calls[0][0]
 
 
+def test_write_snapshot_wraps_all_rows_in_one_transaction(monkeypatch):
+    operations = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def executemany(self, sql, rows):
+            operations.append(("insert", sql, list(rows)))
+
+    class Transaction:
+        def __enter__(self):
+            operations.append(("begin",))
+            return self
+
+        def __exit__(self, exc_type, *_args):
+            operations.append(("rollback" if exc_type else "commit",))
+
+    class WriteConnection:
+        def transaction(self):
+            return Transaction()
+
+        def cursor(self):
+            return Cursor()
+
+    monkeypatch.setattr(db, "conn", fake_connection(WriteConnection()))
+
+    db.write_snapshot(
+        "00981A",
+        dt.date(2026, 7, 2),
+        [Holding("2330", 1000, 5.0), Holding("2454", 500, 2.0)],
+    )
+
+    assert operations[0] == ("begin",)
+    assert operations[1][0] == "insert"
+    assert operations[1][2] == [
+        ("00981A", dt.date(2026, 7, 2), "2330", 1000, 5.0),
+        ("00981A", dt.date(2026, 7, 2), "2454", 500, 2.0),
+    ]
+    assert operations[2] == ("commit",)
+
+
 def test_rebuild_changes_locks_reads_and_replaces_in_one_transaction(
     monkeypatch,
 ):

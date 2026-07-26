@@ -5,9 +5,10 @@
 """
 
 import datetime as dt
+import argparse
 import time
 import traceback
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from zoneinfo import ZoneInfo
 
 from activeetf import db, metrics
@@ -19,6 +20,23 @@ from activeetf.registry import EtfEntry, entries
 from activeetf.validate import ValidationError, validate
 
 PAUSE_SECONDS = 2.0
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="回補歷史 PCF 持股")
+    parser.add_argument(
+        "--etf-id",
+        help="只處理一檔 ETF；必須搭配 --date，形成單日 canary",
+    )
+    parser.add_argument(
+        "--date",
+        type=dt.date.fromisoformat,
+        help="只處理指定交易日（YYYY-MM-DD）；必須搭配 --etf-id",
+    )
+    args = parser.parse_args(argv)
+    if (args.etf_id is None) != (args.date is None):
+        parser.error("--etf-id 與 --date 必須一起提供")
+    return args
 
 
 def _today() -> dt.date:
@@ -84,8 +102,15 @@ def rebuild_holding_changes(etf_ids: list[str]) -> None:
         print(f"  {etf_id}：重建 {change_count} 筆異動")
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
+    args = parse_args(argv)
+    canary = args.etf_id is not None
     supported, skipped = discover_adapters(entries())
+    if canary:
+        if args.etf_id not in supported:
+            raise SystemExit(f"ETF 不支援歷史回補或不存在：{args.etf_id}")
+        supported = {args.etf_id: supported[args.etf_id]}
+        print(f"Canary：{args.etf_id} {args.date.isoformat()}")
     print(f"支援歷史回補：{len(supported)} 檔 → {sorted(supported)}")
     print(f"不支援（上游無日期參數）：{len(skipped)} 檔 → {skipped}\n")
     if not supported:
@@ -102,10 +127,15 @@ def main() -> None:
         return
 
     eligible_ids = sorted(listing_dates)
-    trading_dates = db.benchmark_trading_dates(
-        min(listing_dates.values()),
-        _today(),
-    )
+    if canary:
+        trading_dates = db.benchmark_trading_dates(args.date, args.date)
+        if args.date not in trading_dates:
+            raise SystemExit(f"指定日期不是 0050 有效交易日：{args.date}")
+    else:
+        trading_dates = db.benchmark_trading_dates(
+            min(listing_dates.values()),
+            _today(),
+        )
     existing = db.existing_snapshot_keys(eligible_ids)
     all_targets = backfill_targets(
         trading_dates,
@@ -164,8 +194,11 @@ def main() -> None:
         if index < len(targets):
             time.sleep(PAUSE_SECONDS)
 
-    print("\n重建 holding_change：")
-    rebuild_holding_changes(eligible_ids)
+    if not canary:
+        print("\n重建 holding_change：")
+        rebuild_holding_changes(eligible_ids)
+    else:
+        print("Canary 完成：未重建 holding_change；可確認 fetch、validation、snapshot/log 行為。")
     print(
         f"\n完成：成功 {ok}、已有快照跳過 {skipped_existing}、"
         f"驗證失敗 {validation_failed}、抓取失敗 {fetch_failed}"

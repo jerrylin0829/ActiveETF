@@ -170,6 +170,11 @@ function formatEtfList(items: string[]): string {
 export function latestUnresolvedScrapeFailures(logs: ScrapeLogEntry[]): ScrapeFailure[] {
   const latestByKey = new Map<string, ScrapeLogEntry>();
   const sortedLogs = [...logs].sort((a, b) => {
+    const tradeDateDiff = b.tradeDate.localeCompare(a.tradeDate);
+    if (tradeDateDiff !== 0) {
+      return tradeDateDiff;
+    }
+
     const diff = Date.parse(b.runAt) - Date.parse(a.runAt);
     return Number.isNaN(diff) || diff === 0 ? b.runAt.localeCompare(a.runAt) : diff;
   });

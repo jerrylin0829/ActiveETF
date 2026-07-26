@@ -29,7 +29,7 @@ def sync_etf(entries) -> None:
 
 
 def write_snapshot(etf_id: str, d: dt.date, holdings: list[Holding]) -> None:
-    with conn() as c, c.cursor() as cur:
+    with conn() as c, c.transaction(), c.cursor() as cur:
         cur.executemany(
             """insert into holdings_snapshot (etf_id, trade_date, stock_id, shares, weight_pct)
                values (%s,%s,%s,%s,%s) on conflict do nothing""",

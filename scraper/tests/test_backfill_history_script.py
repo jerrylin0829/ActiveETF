@@ -72,7 +72,7 @@ def test_main_builds_targets_from_cached_0050_trading_dates(monkeypatch):
         lambda etf_ids: captured.setdefault("rebuilt", etf_ids),
     )
 
-    backfill_history.main()
+    backfill_history.main([])
 
     assert captured["calendar"] == (
         listing_date,
@@ -181,7 +181,7 @@ def test_main_logs_validation_failure_without_writing_snapshot(monkeypatch):
         lambda _etf_ids: None,
     )
 
-    backfill_history.main()
+    backfill_history.main([])
 
     assert writes == []
     assert logs[0][:3] == ("00981A", trade_date, "fail")
@@ -255,7 +255,7 @@ def test_main_reports_skips_and_failure_categories_without_relaxing_validation(
     )
     monkeypatch.setattr(backfill_history.time, "sleep", lambda _seconds: None)
 
-    backfill_history.main()
+    backfill_history.main([])
 
     assert [(etf_id, trade_date) for etf_id, trade_date, _ in writes] == [
         ("00990A", dates[2]),
@@ -267,3 +267,58 @@ def test_main_reports_skips_and_failure_categories_without_relaxing_validation(
         "成功 1、已有快照跳過 1、驗證失敗 1、抓取失敗 1"
         in capsys.readouterr().out
     )
+
+
+def test_canary_mode_limits_one_etf_and_date_without_rebuilding_history(
+    monkeypatch,
+    capsys,
+):
+    trade_date = dt.date(2025, 12, 15)
+    entry = SimpleNamespace(
+        etf_id="00990A",
+        adapter="yuanta",
+        universe="global",
+    )
+    fetched = []
+    rebuilt = []
+
+    def fetch_at(_entry, date):
+        fetched.append(date)
+        return [Holding("NVDA US", 1000, 80.0)]
+
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _entries: (
+            {"00990A": (entry, SimpleNamespace(fetch_at=fetch_at))},
+            [],
+        ),
+    )
+    monkeypatch.setattr(backfill_history, "_today", lambda: trade_date)
+    monkeypatch.setattr(
+        backfill_history.db,
+        "etf_listing_dates",
+        lambda _ids: {"00990A": trade_date},
+    )
+    monkeypatch.setattr(
+        backfill_history.db,
+        "benchmark_trading_dates",
+        lambda _start, _end: [trade_date],
+    )
+    monkeypatch.setattr(backfill_history.db, "existing_snapshot_keys", lambda _ids: set())
+    monkeypatch.setattr(backfill_history.db, "known_stock_ids", lambda: set())
+    monkeypatch.setattr(
+        backfill_history.db,
+        "latest_snapshot_date",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(backfill_history.db, "write_snapshot", lambda *_args: None)
+    monkeypatch.setattr(backfill_history.db, "log_scrape", lambda *_args: None)
+    monkeypatch.setattr(backfill_history, "rebuild_holding_changes", rebuilt.append)
+    monkeypatch.setattr(backfill_history.time, "sleep", lambda _seconds: None)
+
+    backfill_history.main(["--etf-id", "00990A", "--date", "2025-12-15"])
+
+    assert fetched == [trade_date]
+    assert rebuilt == []
+    assert "Canary：00990A 2025-12-15" in capsys.readouterr().out

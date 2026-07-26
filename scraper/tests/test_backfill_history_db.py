@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 import pytest
-from psycopg.errors import CheckViolation
+from psycopg.errors import CheckViolation, NumericValueOutOfRange
 
 from activeetf import db
 from activeetf.models import Change, Holding
@@ -180,3 +180,26 @@ def test_rebuild_changes_rolls_back_destructive_replace(seeded_history):
     assert rows == [
         (second, ids.holding_id, "ADD", 100, Decimal("0.2")),
     ]
+
+
+def test_write_snapshot_rolls_back_partial_holdings(seeded_history):
+    ids = seeded_history
+    target_date = ids.dates[1] + dt.timedelta(days=1)
+
+    with pytest.raises(NumericValueOutOfRange):
+        db.write_snapshot(
+            ids.etf_id,
+            target_date,
+            [
+                Holding(ids.holding_id, 1000, 5.0),
+                Holding(ids.benchmark_id, 500, 100_000.0),
+            ],
+        )
+
+    with db.conn() as connection:
+        count = connection.execute(
+            """select count(*) from holdings_snapshot
+               where etf_id = %s and trade_date = %s""",
+            (ids.etf_id, target_date),
+        ).fetchone()[0]
+    assert count == 0

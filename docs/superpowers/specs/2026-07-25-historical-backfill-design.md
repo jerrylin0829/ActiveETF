@@ -76,6 +76,8 @@ def supports_history(module) -> bool:
 
 一次性腳本 `scraper/scripts/backfill_history.py`，**由 User 或其明確授權 session 在本機執行**（依 agent-workflow 的 DB 操作權責）。不放入 GitHub Actions——執行時間長、且屬一次性作業。腳本需輸出逐檔進度與最終統計（成功日數／已有快照跳過日數／validation failure 日數／fetch failure 日數）。
 
+正式回補前先以單檔單日 canary 驗證上游與三道驗證，指令格式為：`uv run python scripts/backfill_history.py --etf-id 00990A --date 2025-12-15`。此模式只處理指定日期、跳過 `holding_change` 全歷史重建；確認 `00990A` 的已知 validation failure 與無 snapshot 行為後，才可執行完整回補。
+
 ## 5. 衍生表重算（順序固定）
 
 快照回補完成後依序執行，每步驟皆可獨立重跑：

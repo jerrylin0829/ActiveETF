@@ -236,4 +236,32 @@ describe("data gap warnings", () => {
       },
     ]);
   });
+
+  it("puts recent trade-date failures before later-run historical failures", () => {
+    const historicalFailures = Array.from({ length: 6 }, (_, index) => ({
+      etfId: `HIST${index}`,
+      tradeDate: `2025-12-${String(index + 1).padStart(2, "0")}`,
+      runAt: `2026-08-${String(index + 1).padStart(2, "0")}T12:00:00Z`,
+      status: "fail" as const,
+      error: "historical failure",
+    }));
+
+    expect(
+      latestUnresolvedScrapeFailures([
+        ...historicalFailures,
+        {
+          etfId: "00985A",
+          tradeDate: "2026-07-24",
+          runAt: "2026-07-24T10:00:00Z",
+          status: "fail",
+          error: "daily failure",
+        },
+      ])[0],
+    ).toEqual({
+      etfId: "00985A",
+      tradeDate: "2026-07-24",
+      runAt: "2026-07-24T10:00:00Z",
+      error: "daily failure",
+    });
+  });
 });
