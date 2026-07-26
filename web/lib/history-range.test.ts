@@ -25,7 +25,7 @@ describe("formatHistoryFrom", () => {
 
   it("有資料時回傳起始日說明", () => {
     expect(formatHistoryFrom(ranges, "00981A")).toBe(
-      "歷史資料自 2025-05-16 起",
+      "可用歷史資料自 2025-05-16 起",
     );
   });
 

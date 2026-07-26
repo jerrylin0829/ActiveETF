@@ -14,8 +14,9 @@ from activeetf import db, metrics
 from activeetf.adapters import base as adapter_base
 from activeetf.backfill import backfill_targets
 from activeetf.diff import diff_snapshots
+from activeetf.models import Change, Holding
 from activeetf.registry import EtfEntry, entries
-from activeetf.validate import validate
+from activeetf.validate import ValidationError, validate
 
 PAUSE_SECONDS = 2.0
 
@@ -41,38 +42,46 @@ def discover_adapters(
     return supported, skipped
 
 
-def rebuild_holding_changes(etf_ids: list[str]) -> None:
-    """Replay complete snapshot histories and atomically replace derived events."""
-    for etf_id in etf_ids:
-        snapshots = db.snapshot_history(etf_id)
-        dates = sorted(snapshots)
-        dated_changes = []
-        scoring_events = []
+def build_holding_changes(
+    snapshots: dict[dt.date, dict[str, Holding]],
+) -> list[tuple[dt.date, Change]]:
+    """Replay complete snapshots into deterministic derived events."""
+    dates = sorted(snapshots)
+    dated_changes = []
+    scoring_events = []
 
-        for previous_date, current_date in zip(dates, dates[1:], strict=False):
-            previous = snapshots[previous_date]
-            current = snapshots[current_date]
-            open_stock_ids = metrics.open_round_stock_ids(scoring_events)
-            changes = diff_snapshots(
-                previous,
-                current,
-                open_stock_ids=open_stock_ids,
-            )
-            for change in changes:
-                prior = previous.get(change.stock_id)
-                scoring_events.append(
-                    (
-                        current_date,
-                        change.stock_id,
-                        change.change_type,
-                        change.shares_delta,
-                        prior.shares if prior else 0,
-                    )
+    for previous_date, current_date in zip(dates, dates[1:], strict=False):
+        previous = snapshots[previous_date]
+        current = snapshots[current_date]
+        open_stock_ids = metrics.open_round_stock_ids(scoring_events)
+        changes = diff_snapshots(
+            previous,
+            current,
+            open_stock_ids=open_stock_ids,
+        )
+        for change in changes:
+            prior = previous.get(change.stock_id)
+            scoring_events.append(
+                (
+                    current_date,
+                    change.stock_id,
+                    change.change_type,
+                    change.shares_delta,
+                    prior.shares if prior else 0,
                 )
-                dated_changes.append((current_date, change))
+            )
+            dated_changes.append((current_date, change))
+    return dated_changes
 
-        db.replace_changes(etf_id, dated_changes)
-        print(f"  {etf_id}：重建 {len(dated_changes)} 筆異動")
+
+def rebuild_holding_changes(etf_ids: list[str]) -> None:
+    """Replay histories while the DB holds the rebuild transaction boundary."""
+    for etf_id in etf_ids:
+        change_count = db.rebuild_changes_from_snapshot_history(
+            etf_id,
+            build_holding_changes,
+        )
+        print(f"  {etf_id}：重建 {change_count} 筆異動")
 
 
 def main() -> None:
@@ -98,18 +107,25 @@ def main() -> None:
         _today(),
     )
     existing = db.existing_snapshot_keys(eligible_ids)
+    all_targets = backfill_targets(
+        trading_dates,
+        listing_dates,
+        set(),
+    )
     targets = backfill_targets(trading_dates, listing_dates, existing)
+    skipped_existing = len(all_targets) - len(targets)
     estimated_minutes = len(targets) * PAUSE_SECONDS / 60
-    print(f"待抓 {len(targets)} 筆，預估 {estimated_minutes:.0f} 分鐘\n")
+    print(
+        f"待抓 {len(targets)} 筆、已有快照跳過 {skipped_existing} 筆，"
+        f"預估 {estimated_minutes:.0f} 分鐘\n"
+    )
 
     known_ids = db.known_stock_ids() if targets else set()
-    ok = failed = 0
+    ok = validation_failed = fetch_failed = 0
     for index, (etf_id, trade_date) in enumerate(targets, 1):
         entry, module = supported[etf_id]
         try:
             holdings = module.fetch_at(entry, trade_date)
-            if not holdings:
-                raise ValueError("empty holdings")
             previous_date = db.latest_snapshot_date(etf_id, before=trade_date)
             previous_count = (
                 db.snapshot_count(etf_id, previous_date)
@@ -125,22 +141,36 @@ def main() -> None:
             db.write_snapshot(etf_id, trade_date, holdings)
             db.log_scrape(etf_id, trade_date, "ok")
             ok += 1
+        except ValidationError as ex:
+            detail = (
+                f"backfill {type(ex).__name__}: {ex}\n"
+                f"{traceback.format_exc()[-500:]}"
+            )
+            db.log_scrape(etf_id, trade_date, "fail", detail)
+            validation_failed += 1
         except Exception as ex:
             detail = (
                 f"backfill {type(ex).__name__}: {ex}\n"
                 f"{traceback.format_exc()[-500:]}"
             )
             db.log_scrape(etf_id, trade_date, "fail", detail)
-            failed += 1
+            fetch_failed += 1
 
         if index % 50 == 0:
-            print(f"  {index}/{len(targets)}  成功 {ok} 失敗 {failed}")
+            print(
+                f"  {index}/{len(targets)}  成功 {ok} "
+                f"驗證失敗 {validation_failed} 抓取失敗 {fetch_failed}"
+            )
         if index < len(targets):
             time.sleep(PAUSE_SECONDS)
 
     print("\n重建 holding_change：")
     rebuild_holding_changes(eligible_ids)
-    print(f"\n完成：成功 {ok}、失敗 {failed}（失敗明細見 scrape_log）")
+    print(
+        f"\n完成：成功 {ok}、已有快照跳過 {skipped_existing}、"
+        f"驗證失敗 {validation_failed}、抓取失敗 {fetch_failed}"
+        "（失敗明細見 scrape_log）"
+    )
     print("下一步（由 User 或授權 session 執行）：")
     print("  uv run python scripts/backfill_aggregates.py")
     print(

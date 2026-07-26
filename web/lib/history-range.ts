@@ -17,7 +17,7 @@ export function formatHistoryFrom(
   etfId: string,
 ): string | null {
   const found = ranges.find((range) => range.etfId === etfId);
-  return found ? `歷史資料自 ${found.historyFrom} 起` : null;
+  return found ? `可用歷史資料自 ${found.historyFrom} 起` : null;
 }
 
 export async function fetchHistoryRanges(): Promise<{

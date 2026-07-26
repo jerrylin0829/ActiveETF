@@ -12,7 +12,7 @@
 
 | 狀態 | 檔數 | 投信 |
 |---|---|---|
-| ✅ 確認支援，可回溯至上市初期 | **12** | 統一（00981A、00403A、00988A）、元大（00990A）、國泰（00400A）、第一金（00994A）、安聯（00402A、00984A、00993A）、**中信（00406A、00983A、00995A）** |
+| ✅ 確認支援，可從上市日起逐日查詢 | **12** | 統一（00981A、00403A、00988A）、元大（00990A）、國泰（00400A）、第一金（00994A）、安聯（00402A、00984A、00993A）、**中信（00406A、00983A、00995A）** |
 | ⚠️ 待確認 | 3 | 野村（**官網維護中**，維護結束後重測即可判定） |
 | ❌ 上游無日期參數 | 13 | AB、群益、富邦、復華、摩根、凱基、兆豐、台新 |
 
@@ -26,7 +26,7 @@
 
 | 項目 | 決定 |
 |---|---|
-| 回補範圍 | 12 檔各自回補至**上市日**（起點依 ETF 而異） |
+| 回補範圍 | 12 檔各自從**上市日開始逐交易日嘗試**；僅寫入通過三道驗證的日期，`history_from` 為最早通過驗證日 |
 | 不對稱資料 | 標示各檔歷史起始日 **+** 跨檔比較額外標示樣本期間差異 |
 | 歷史指標 | `etf_metrics` **只重算最新一日**（歷史指標列無人讀取，日後需要再補） |
 | Adapter 介面 | 新增**可選能力** `fetch_at(entry, date)`，不改既有 `fetch(entry)` |
@@ -55,7 +55,7 @@ def supports_history(module) -> bool:
 
 ### 4.1 交易日曆
 
-取自**已快取的 `stock_price` 中 0050 的交易日序列**（現有 302 日，涵蓋本次回補全期），不額外呼叫 FinMind。各 ETF 只回補「≥ 該檔上市日」的交易日——上市日由該檔在 `stock_price` 的最早日期推得。
+取自**已快取的 `stock_price` 中 0050 的交易日序列**（現有 302 日，涵蓋本次回補全期），不額外呼叫 FinMind。各 ETF 只嘗試「≥ 該檔上市日」的交易日——上市日由該檔在 `stock_price` 的最早有限還原價日期推得；實際可用起點由首個通過驗證並成功寫入的快照決定。
 
 ### 4.2 抓取順序與冪等
 
@@ -68,15 +68,19 @@ def supports_history(module) -> bool:
 
 三道驗證原封套用於歷史資料：權重總和 70–101%、筆數 vs 前日無突變、股票代號存在於 `stock_info`。任一不過即**跳過該日、不寫入**，並記入 `scrape_log`（`trade_date` 為該歷史日）。錯資料比缺資料危險，此原則不因回補而放寬。
 
+已知案例：00990A 官網 2025-12-15 PCF 的股票曝險為 50.80%，低於全專案 70% 下限，故該日必須記錄 validation failure 並略過；不得為 global ETF 另開例外。其 `history_from` 應為後續最早通過驗證的交易日。
+
+歷史回補的 `scrape_log.run_at` 是本次執行時間，不代表資料交易日。Dashboard 的有限筆數告警查詢必須先依 `trade_date DESC`、再依 `run_at DESC, id DESC` 排序，避免大量歷史 log 排擠近期每日失敗。
+
 ### 4.4 執行環境
 
-一次性腳本 `scraper/scripts/backfill_history.py`，**由 User 或其明確授權 session 在本機執行**（依 agent-workflow 的 DB 操作權責）。不放入 GitHub Actions——執行時間長、且屬一次性作業。腳本需輸出逐檔進度與最終統計（成功日數／跳過日數／驗證失敗日數）。
+一次性腳本 `scraper/scripts/backfill_history.py`，**由 User 或其明確授權 session 在本機執行**（依 agent-workflow 的 DB 操作權責）。不放入 GitHub Actions——執行時間長、且屬一次性作業。腳本需輸出逐檔進度與最終統計（成功日數／已有快照跳過日數／validation failure 日數／fetch failure 日數）。
 
 ## 5. 衍生表重算（順序固定）
 
 快照回補完成後依序執行，每步驟皆可獨立重跑：
 
-1. **`holding_change`**：按 ETF、按時間正序，對相鄰兩個快照日呼叫既有 `diff_snapshots()` 重算。既有事件定義不變（股數變化 + 權重變化 ≥ 0.05pp 同時成立）
+1. **`holding_change`**：按 ETF、按時間正序，對相鄰兩個快照日呼叫既有 `diff_snapshots()` 重算。每檔 ETF 的 snapshot read、舊事件 delete、新事件 insert 必須在同一 transaction；transaction 先依固定順序鎖住 `holdings_snapshot` 與 `holding_change`，避免與每日 pipeline 競態。任何 insert 失敗須完整 rollback。既有事件定義不變（股數變化 + 權重變化 ≥ 0.05pp 同時成立）
 2. **`cross_holdings_daily` / `industry_weight_daily`**：逐日呼叫 `db.refresh_daily_aggregates(d)`——**現成腳本 `backfill_aggregates.py` 可直接重用**
 3. **`open_position`**：`metrics.refresh_open_positions(最新交易日)`，一次即可（表為當前狀態快照）
 4. **`etf_metrics`**：`metrics.compute_all(最新交易日)`，一次即可（依 §2 裁決，歷史指標列不重算）
@@ -99,7 +103,7 @@ from holdings_snapshot group by etf_id;
 
 ### 6.2 前端呈現
 
-- **ETF 個別頁**：標題區顯示「歷史資料自 YYYY-MM-DD 起」
+- **ETF 個別頁**：標題區顯示「可用歷史資料自 YYYY-MM-DD 起」，不得暗示必然等於上市日
 - **排行榜**：選股勝率欄位一律於樣本數後方加註起算日，例如 `61%（已實現 14/22、未平倉 8/14｜自 2025-05-16 起）`——**無條件顯示，不設「差異夠大才標」的門檻**，避免「多短才算短」的主觀判斷，也讓使用者自行比較樣本期間
 - **既有的「樣本不足」淡化規則**（樣本 <10）維持不變，兩者並存
 
@@ -107,7 +111,7 @@ from holdings_snapshot group by etf_id;
 
 §8 原文「持股明細自上線日起累積（歷史 PCF 無法回補，故越早上線越好）」改為：
 
-> 持股明細自上線日起累積；**部分投信的 PCF API 支援指定歷史日期查詢，該部分 ETF 已回補至上市日**（見 `2026-07-25-historical-backfill-design.md`）。上游無日期參數者仍僅有上線後資料，此不對稱由 `dashboard_etf_history_range` view 揭露並於前端標示。
+> 持股明細自上線日起累積；**部分投信的 PCF API 支援指定歷史日期查詢，該部分 ETF 從上市日起逐交易日嘗試回補，但只寫入通過既有三道驗證的日期**（見 `2026-07-25-historical-backfill-design.md`）。上游無日期參數者仍僅有上線後資料；各檔最早可用日由 `dashboard_etf_history_range` view 揭露並於前端標示。
 
 ## 8. 測試
 
@@ -116,13 +120,13 @@ from holdings_snapshot group by etf_id;
 - **回補腳本純函式**：交易日序列過濾（≥ 上市日）、跳過既有快照的冪等判斷、輪替排程順序
 - **驗證整合**：歷史資料同樣走三道驗證，不過關不寫入（以假資料整合測試，`_T` 假代號、無 `SUPABASE_DB_URL` 自動 skip）
 - **view**：`dashboard_etf_history_range` 回傳各 ETF 正確起訖
-- **真資料驗收**：回補後抽一檔（建議 00981A）核對——(a) `history_from` 等於其上市日附近、(b) 任取一歷史日的持股與投信官網當日 PCF 一致、(c) 該檔選股勝率樣本數明顯增加
+- **真資料驗收**：回補後抽一檔（建議 00981A）核對——(a) `history_from` 等於其最早通過驗證日、(b) 任取一歷史日的持股與投信官網當日 PCF 一致、(c) 該檔選股勝率樣本數明顯增加；另核對 00990A 2025-12-15 為 validation failure、無 snapshot，且後續首個合格日成為 `history_from`
 
 ## 9. 風險
 
 - **上游暫時無法存取**：野村於 2026-07-25 為機房例行維護（官網回傳維護公告圖片，非阻擋機制）。回補期間若某家暫時無法存取，腳本應記錄並繼續其他家，不整批中止
 - **請求量**：約 2,500–3,000 次分散於 2 小時，遠低於一般網站負荷；仍須維持 2 秒間隔與輪替，勿並行加速
-- **驗證失敗率未知**：歷史資料可能有格式差異導致驗證不過。腳本須輸出失敗統計；若某檔失敗率過高應停下檢視，不可放寬驗證了事
+- **驗證失敗率未知**：歷史資料可能有格式或資產配置差異導致驗證不過。腳本須分開輸出已有快照跳過、validation failure 與 fetch failure；若某檔失敗率過高應停下檢視，不可放寬驗證了事
 - **儲存量**：預估 `holdings_snapshot` 增至約 38 萬列／50MB，加衍生表總計約 100MB，Supabase 免費層 500MB 內（目前僅用 6MB）
 
 ## 10. 不做（YAGNI）

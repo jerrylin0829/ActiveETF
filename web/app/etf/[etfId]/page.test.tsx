@@ -91,7 +91,7 @@ describe("EtfDetailPage", () => {
 
     expect(fetchDetailMock).toHaveBeenCalledWith("00981A", "2330");
     expect(screen.getByRole("heading", { name: "00981A 主動統一台股增長" })).toBeInTheDocument();
-    expect(screen.getByText("歷史資料自 2025-05-16 起")).toBeInTheDocument();
+    expect(screen.getByText("可用歷史資料自 2025-05-16 起")).toBeInTheDocument();
     expect(screen.getByText("統一")).toBeInTheDocument();
     expect(screen.getAllByRole("alert").some((alert) =>
       alert.textContent?.includes("部分欄位讀取失敗"),

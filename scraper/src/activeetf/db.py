@@ -1,5 +1,6 @@
 """Supabase 持久層。唯一碰 SQL 的模組；業務邏輯（validate/diff/metrics）全部與 DB 解耦。"""
 import os, datetime as dt
+from collections.abc import Callable
 from contextlib import contextmanager
 import psycopg
 from activeetf.models import Holding, Change
@@ -68,9 +69,19 @@ def write_changes(etf_id: str, d: dt.date, changes: list[Change]) -> None:
              for ch in changes])
 
 
-def snapshot_history(etf_id: str) -> dict[dt.date, dict[str, Holding]]:
-    """Load one ETF's complete snapshot history in chronological order."""
-    with conn() as c:
+def rebuild_changes_from_snapshot_history(
+    etf_id: str,
+    build_changes: Callable[
+        [dict[dt.date, dict[str, Holding]]],
+        list[tuple[dt.date, Change]],
+    ],
+) -> int:
+    """Lock the fact/derived boundary and replace one ETF's event history."""
+    with conn() as c, c.transaction():
+        # Serialize both snapshot inserts and event writes while replaying the
+        # append-only facts. The daily pipeline then lands wholly before/after.
+        c.execute("lock table holdings_snapshot in share mode")
+        c.execute("lock table holding_change in share row exclusive mode")
         rows = c.execute(
             """select trade_date, stock_id, shares, weight_pct
                from holdings_snapshot
@@ -78,22 +89,14 @@ def snapshot_history(etf_id: str) -> dict[dt.date, dict[str, Holding]]:
                order by trade_date, stock_id""",
             (etf_id,),
         ).fetchall()
-    history: dict[dt.date, dict[str, Holding]] = {}
-    for trade_date, stock_id, shares, weight_pct in rows:
-        history.setdefault(trade_date, {})[stock_id] = Holding(
-            stock_id,
-            int(shares),
-            float(weight_pct),
-        )
-    return history
-
-
-def replace_changes(
-    etf_id: str,
-    dated_changes: list[tuple[dt.date, Change]],
-) -> None:
-    """Atomically replace one ETF's derived holding-change history."""
-    with conn() as c, c.transaction():
+        history: dict[dt.date, dict[str, Holding]] = {}
+        for trade_date, stock_id, shares, weight_pct in rows:
+            history.setdefault(trade_date, {})[stock_id] = Holding(
+                stock_id,
+                int(shares),
+                float(weight_pct),
+            )
+        dated_changes = build_changes(history)
         c.execute("delete from holding_change where etf_id = %s", (etf_id,))
         with c.cursor() as cur:
             cur.executemany(
@@ -113,6 +116,7 @@ def replace_changes(
                     for trade_date, change in dated_changes
                 ],
             )
+    return len(dated_changes)
 
 
 def scoring_events(etf_id: str, before: dt.date | None = None) -> list[tuple]:
@@ -221,7 +225,11 @@ def etf_listing_dates(etf_ids: list[str]) -> dict[str, dt.date]:
                from stock_price
                where stock_id = any(%s)
                  and adj_close is not null
-                 and adj_close <> 'NaN'::numeric
+                 and adj_close not in (
+                   'NaN'::numeric,
+                   'Infinity'::numeric,
+                   '-Infinity'::numeric
+                 )
                group by stock_id""",
             (etf_ids,),
         ).fetchall()
@@ -242,7 +250,11 @@ def benchmark_trading_dates(
                where stock_id = %s
                  and trade_date between %s and %s
                  and adj_close is not null
-                 and adj_close <> 'NaN'::numeric
+                 and adj_close not in (
+                   'NaN'::numeric,
+                   'Infinity'::numeric,
+                   '-Infinity'::numeric
+                 )
                order by trade_date""",
             (benchmark_id, start, end),
         ).fetchall()

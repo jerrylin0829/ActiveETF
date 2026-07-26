@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 依 `docs/superpowers/specs/2026-07-25-historical-backfill-design.md`，為 6 家支援歷史查詢的投信加上 `fetch_at(entry, date)` 可選能力，回補 12 檔 ETF 至上市日，重算衍生表，並在前端誠實揭露各檔歷史起始日。
+**Goal:** 依 `docs/superpowers/specs/2026-07-25-historical-backfill-design.md`，為 6 家支援歷史查詢的投信加上 `fetch_at(entry, date)` 可選能力，讓 12 檔 ETF 從上市日起逐交易日嘗試回補、僅寫入通過驗證的日期，重算衍生表，並在前端誠實揭露各檔最早可用歷史日。
+
+> **2026-07-26 Evaluator 修訂（優先於下方原始 Task 8 程式片段）**：00990A 2025-12-15 的 50.80% 股票曝險維持 validation failure，不另訂 global ETF 例外；腳本統計分列已有快照、validation failure、fetch failure。`holding_change` 的 snapshot read 與 replace 改為同 transaction，依序鎖 `holdings_snapshot`、`holding_change`，並補真 DB rollback test。Dashboard 的有限 `scrape_log` 查詢改依 `trade_date DESC, run_at DESC, id DESC`，避免歷史回補紀錄排擠近期告警。
 
 **Architecture:** `fetch_at` 為**可選能力**——只有支援的 adapter 實作，回補腳本以 `supports_history()` 偵測，每日 pipeline 的 `fetch(entry)` 完全不動。回補腳本按時間正序、跳過已有快照（天然冪等即續跑），三道驗證不放寬。快照入庫後衍生表全部重算（append-only 事實來源的設計在此兌現）。
 
@@ -988,7 +990,7 @@ describe("formatHistoryFrom", () => {
     { etfId: "00981A", historyFrom: "2025-05-16", historyTo: "2026-07-24" },
   ];
   it("有資料時回傳起始日說明", () => {
-    expect(formatHistoryFrom(ranges, "00981A")).toBe("歷史資料自 2025-05-16 起");
+    expect(formatHistoryFrom(ranges, "00981A")).toBe("可用歷史資料自 2025-05-16 起");
   });
   it("查無該 ETF 時回傳 null，由呼叫端決定不顯示", () => {
     expect(formatHistoryFrom(ranges, "00404A")).toBeNull();
@@ -1016,7 +1018,7 @@ export type HistoryRange = {
 
 export function formatHistoryFrom(ranges: HistoryRange[], etfId: string): string | null {
   const found = ranges.find((r) => r.etfId === etfId);
-  return found ? `歷史資料自 ${found.historyFrom} 起` : null;
+  return found ? `可用歷史資料自 ${found.historyFrom} 起` : null;
 }
 
 export async function fetchHistoryRanges(): Promise<{
@@ -1173,9 +1175,9 @@ metrics.refresh_open_positions(d); metrics.compute_all(d)"
 
 - [ ] **Step 3: 回補後驗收（User 執行，結果貼回 PR）**
 
-1. `select etf_id, min(trade_date), max(trade_date), count(distinct trade_date) from holdings_snapshot group by etf_id order by 2;` — 12 檔的 `min` 應接近各自上市日，13 檔仍為 2026-07-13
+1. `select etf_id, min(trade_date), max(trade_date), count(distinct trade_date) from holdings_snapshot group by etf_id order by 2;` — 12 檔的 `min` 應為各自最早通過驗證日；00990A 2025-12-15 不應有 snapshot，13 檔不支援歷史者仍為 2026-07-13
 2. 抽 00981A 任一歷史日，與統一官網該日 PCF 人工對照前五大持股
-3. `/etf/00981A` 顯示「歷史資料自 YYYY-MM-DD 起」；排行榜勝率欄顯示起算日
+3. `/etf/00981A` 顯示「可用歷史資料自 YYYY-MM-DD 起」；排行榜勝率欄顯示起算日
 4. `select count(*) from holding_change;` — 應遠多於回補前（歷史異動事件已產生）
 5. `select etf_id, picking_realized_total from etf_metrics where trade_date=(select max(trade_date) from etf_metrics) order by 2 desc;` — 12 檔的樣本數應明顯高於其餘
 

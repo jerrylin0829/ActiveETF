@@ -2,11 +2,14 @@ import datetime as dt
 import os
 import uuid
 from dataclasses import dataclass
+from decimal import Decimal
 
 import pytest
+from psycopg.errors import CheckViolation
 
 from activeetf import db
-from activeetf.models import Holding
+from activeetf.models import Change, Holding
+from scripts.backfill_history import build_holding_changes
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("SUPABASE_DB_URL"),
@@ -37,6 +40,10 @@ def unique_ids() -> FixtureIds:
 def wipe(ids: FixtureIds) -> None:
     stock_ids = [ids.etf_id, ids.holding_id, ids.benchmark_id]
     with db.conn() as connection:
+        connection.execute(
+            "delete from holding_change where etf_id = %s",
+            (ids.etf_id,),
+        )
         connection.execute(
             "delete from holdings_snapshot where etf_id = %s",
             (ids.etf_id,),
@@ -93,6 +100,11 @@ def seeded_history():
             first,
             [Holding(ids.holding_id, 1000, 5.0)],
         )
+        db.write_snapshot(
+            ids.etf_id,
+            second,
+            [Holding(ids.holding_id, 1100, 5.2)],
+        )
         yield ids
     finally:
         wipe(ids)
@@ -102,10 +114,69 @@ def test_history_db_helpers(seeded_history):
     ids = seeded_history
     first, second = ids.dates
 
-    assert db.existing_snapshot_keys([ids.etf_id]) == {(ids.etf_id, first)}
+    assert db.existing_snapshot_keys([ids.etf_id]) == {
+        (ids.etf_id, first),
+        (ids.etf_id, second),
+    }
     assert db.etf_listing_dates([ids.etf_id]) == {ids.etf_id: first}
     assert db.benchmark_trading_dates(
         first,
         second,
         benchmark_id=ids.benchmark_id,
     ) == [first, second]
+
+
+def test_rebuild_changes_from_snapshot_history_integration(seeded_history):
+    ids = seeded_history
+    _first, second = ids.dates
+
+    count = db.rebuild_changes_from_snapshot_history(
+        ids.etf_id,
+        build_holding_changes,
+    )
+
+    assert count == 1
+    with db.conn() as connection:
+        rows = connection.execute(
+            """select trade_date, stock_id, change_type,
+                      shares_delta, weight_delta_pct
+               from holding_change
+               where etf_id = %s""",
+            (ids.etf_id,),
+        ).fetchall()
+    assert rows == [
+        (second, ids.holding_id, "ADD", 100, Decimal("0.2")),
+    ]
+
+
+def test_rebuild_changes_rolls_back_destructive_replace(seeded_history):
+    ids = seeded_history
+    _first, second = ids.dates
+    sentinel = Change(ids.holding_id, "ADD", 100, 0.2)
+    db.write_changes(ids.etf_id, second, [sentinel])
+
+    def invalid_changes(_history):
+        return [
+            (
+                second,
+                Change(ids.holding_id, "INVALID", 999, 9.99),
+            )
+        ]
+
+    with pytest.raises(CheckViolation):
+        db.rebuild_changes_from_snapshot_history(
+            ids.etf_id,
+            invalid_changes,
+        )
+
+    with db.conn() as connection:
+        rows = connection.execute(
+            """select trade_date, stock_id, change_type,
+                      shares_delta, weight_delta_pct
+               from holding_change
+               where etf_id = %s""",
+            (ids.etf_id,),
+        ).fetchall()
+    assert rows == [
+        (second, ids.holding_id, "ADD", 100, Decimal("0.2")),
+    ]
