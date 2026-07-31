@@ -13,13 +13,15 @@ from zoneinfo import ZoneInfo
 
 from activeetf import db, metrics
 from activeetf.adapters import base as adapter_base
-from activeetf.backfill import backfill_targets
+from activeetf.backfill import backfill_targets, request_date_for
 from activeetf.diff import diff_snapshots
 from activeetf.models import Change, Holding
 from activeetf.registry import EtfEntry, entries
-from activeetf.validate import ValidationError, validate
+from activeetf.validate import ValidationError, validate, validate_source_date
 
 PAUSE_SECONDS = 2.0
+# canary 只給一天，但位移需要前後交易日，故查日曆時往兩邊多要一段
+CANARY_WINDOW = dt.timedelta(days=14)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -128,7 +130,10 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     eligible_ids = sorted(listing_dates)
     if canary:
-        trading_dates = db.benchmark_trading_dates(args.date, args.date)
+        trading_dates = db.benchmark_trading_dates(
+            args.date - CANARY_WINDOW,
+            args.date + CANARY_WINDOW,
+        )
         if args.date not in trading_dates:
             raise SystemExit(f"指定日期不是 0050 有效交易日：{args.date}")
     else:
@@ -136,13 +141,15 @@ def main(argv: Sequence[str] | None = None) -> None:
             min(listing_dates.values()),
             _today(),
         )
+    # 日曆要完整（位移換算需要目標日的前後交易日），但 canary 只跑指定那一天
+    target_dates = [args.date] if canary else trading_dates
     existing = db.existing_snapshot_keys(eligible_ids)
     all_targets = backfill_targets(
-        trading_dates,
+        target_dates,
         listing_dates,
         set(),
     )
-    targets = backfill_targets(trading_dates, listing_dates, existing)
+    targets = backfill_targets(target_dates, listing_dates, existing)
     skipped_existing = len(all_targets) - len(targets)
     estimated_minutes = len(targets) * PAUSE_SECONDS / 60
     print(
@@ -155,7 +162,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     for index, (etf_id, trade_date) in enumerate(targets, 1):
         entry, module = supported[etf_id]
         try:
-            holdings = module.fetch_at(entry, trade_date)
+            request_date = request_date_for(
+                trading_dates,
+                trade_date,
+                adapter_base.history_request_offset(module),
+            )
+            if request_date is None:
+                raise LookupError(
+                    f"交易日曆內找不到 {trade_date} 對應的請求日"
+                    f"（位移 {adapter_base.history_request_offset(module)} 個交易日）"
+                )
+            holdings, upstream_date = module.fetch_at(entry, request_date)
+            validate_source_date(upstream_date, trade_date)
             previous_date = db.latest_snapshot_date(etf_id, before=trade_date)
             previous_count = (
                 db.snapshot_count(etf_id, previous_date)

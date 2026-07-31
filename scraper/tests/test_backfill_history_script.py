@@ -129,7 +129,8 @@ def test_main_logs_validation_failure_without_writing_snapshot(monkeypatch):
         universe="tw",
     )
     module = SimpleNamespace(
-        fetch_at=lambda *_args: [Holding("2330", 1000, 5.0)]
+        # 資料日對得上，擋下來的是權重總和那一道
+        fetch_at=lambda _entry, date: ([Holding("2330", 1000, 5.0)], date)
     )
     writes = []
     logs = []
@@ -201,10 +202,10 @@ def test_main_reports_skips_and_failure_categories_without_relaxing_validation(
 
     def fetch_at(_entry, trade_date):
         if trade_date == dates[0]:
-            return [Holding("NVDA US", 1000, 50.8)]
+            return [Holding("NVDA US", 1000, 50.8)], trade_date
         if trade_date == dates[1]:
             raise RuntimeError("upstream unavailable")
-        return [Holding("NVDA US", 1000, 80.0)]
+        return [Holding("NVDA US", 1000, 80.0)], trade_date
 
     monkeypatch.setattr(
         backfill_history,
@@ -322,3 +323,218 @@ def test_canary_mode_limits_one_etf_and_date_without_rebuilding_history(
     assert fetched == [trade_date]
     assert rebuilt == []
     assert "Canary：00990A 2025-12-15" in capsys.readouterr().out
+
+
+# --- 日期語意 gate（2026-07-31 實測後新增）-------------------------------
+# 六支 fetch_at 有四支的請求日不等於資料日。腳本必須（a）依交易日位移換算請求日、
+# （b）寫入前核對上游自報的資料日等於目標 trade_date。
+
+def _stub_db(monkeypatch, *, listing, trading_dates, existing=frozenset()):
+    writes, logs = [], []
+    monkeypatch.setattr(backfill_history, "_today", lambda: max(trading_dates))
+    monkeypatch.setattr(
+        backfill_history.db, "etf_listing_dates", lambda _ids: listing
+    )
+    monkeypatch.setattr(
+        backfill_history.db,
+        "benchmark_trading_dates",
+        lambda _start, _end: list(trading_dates),
+    )
+    monkeypatch.setattr(
+        backfill_history.db, "existing_snapshot_keys", lambda _ids: set(existing)
+    )
+    monkeypatch.setattr(backfill_history.db, "known_stock_ids", lambda: {"2330"})
+    monkeypatch.setattr(
+        backfill_history.db, "latest_snapshot_date", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        backfill_history.db, "write_snapshot", lambda *args: writes.append(args)
+    )
+    monkeypatch.setattr(
+        backfill_history.db, "log_scrape", lambda *args: logs.append(args)
+    )
+    monkeypatch.setattr(
+        backfill_history, "rebuild_holding_changes", lambda _ids: None
+    )
+    monkeypatch.setattr(backfill_history.time, "sleep", lambda _s: None)
+    return writes, logs
+
+
+def _entry(etf_id="00981A", adapter="uni"):
+    return SimpleNamespace(etf_id=etf_id, adapter=adapter, universe="tw")
+
+
+def _holdings():
+    return [Holding("2330", 1000, 90.0)]
+
+
+# 2026-07-24(五) 與 07-27(一) 之間隔著週末
+WEEK = [dt.date(2026, 7, 23), dt.date(2026, 7, 24), dt.date(2026, 7, 27)]
+
+
+def test_requests_the_offset_shifted_trading_day_not_the_target_date(monkeypatch):
+    requested = []
+
+    def fetch_at(_entry, date):
+        requested.append(date)
+        return _holdings(), date - dt.timedelta(days=1)
+
+    module = SimpleNamespace(fetch_at=fetch_at, HISTORY_REQUEST_OFFSET=1)
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    _stub_db(monkeypatch, listing={"00981A": WEEK[1]}, trading_dates=WEEK)
+
+    backfill_history.main([])
+
+    # 目標 07-24 的請求日是次一「交易日」07-27，不是日曆的 07-25
+    assert requested == [dt.date(2026, 7, 27)]
+
+
+def test_writes_target_date_when_upstream_source_date_matches(monkeypatch):
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: (_holdings(), dt.date(2026, 7, 24)),
+        HISTORY_REQUEST_OFFSET=1,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, logs = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[1]}, trading_dates=WEEK
+    )
+
+    backfill_history.main([])
+
+    assert [(etf_id, date) for etf_id, date, _ in writes] == [
+        ("00981A", dt.date(2026, 7, 24))
+    ]
+    assert logs[0][2] == "ok"
+
+
+def test_refuses_to_write_when_upstream_returns_another_days_holdings(monkeypatch):
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: (_holdings(), dt.date(2026, 7, 23)),
+        HISTORY_REQUEST_OFFSET=1,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, logs = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[1]}, trading_dates=WEEK
+    )
+
+    backfill_history.main([])
+
+    assert writes == []
+    assert logs[0][:3] == ("00981A", dt.date(2026, 7, 24), "fail")
+    assert "SourceDateMismatch" in logs[0][3]
+
+
+def test_date_gate_holds_even_when_adjacent_days_have_identical_holdings(
+    monkeypatch,
+):
+    """連續兩日持股完全相同時，內容比對無鑑別力——只有資料日能擋住錯位。"""
+    module = SimpleNamespace(
+        # 不論請求哪一天都回同一份持股，且資料日永遠慢一個交易日
+        fetch_at=lambda _entry, date: (_holdings(), dt.date(2026, 7, 23)),
+        HISTORY_REQUEST_OFFSET=0,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, logs = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[0]}, trading_dates=WEEK
+    )
+
+    backfill_history.main([])
+
+    # 只有 07-23 這天的資料日對得上，其餘兩天必須被擋下
+    assert [date for _, date, _ in writes] == [dt.date(2026, 7, 23)]
+    assert [log[2] for log in logs] == ["ok", "fail", "fail"]
+
+
+def test_missing_source_date_is_refused_rather_than_trusted(monkeypatch):
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: (_holdings(), None),
+        HISTORY_REQUEST_OFFSET=0,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, logs = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[2]}, trading_dates=WEEK
+    )
+
+    backfill_history.main([])
+
+    assert writes == []
+    assert logs[0][2] == "fail"
+
+
+def test_skips_target_whose_request_date_falls_outside_the_trading_calendar(
+    monkeypatch,
+):
+    fetched = []
+
+    def fetch_at(_entry, date):
+        fetched.append(date)
+        return _holdings(), date
+
+    module = SimpleNamespace(fetch_at=fetch_at, HISTORY_REQUEST_OFFSET=1)
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, logs = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[2]}, trading_dates=WEEK
+    )
+
+    backfill_history.main([])
+
+    # 目標 07-27 是日曆最後一天，位移後沒有請求日可用——不得猜一個日期送出
+    assert fetched == []
+    assert writes == []
+    assert logs[0][:3] == ("00981A", dt.date(2026, 7, 27), "fail")
+
+
+def test_canary_widens_the_calendar_window_so_the_offset_has_neighbours(
+    monkeypatch,
+):
+    captured = {}
+    requested = []
+
+    def fetch_at(_entry, date):
+        requested.append(date)
+        return _holdings(), dt.date(2026, 7, 24)
+
+    module = SimpleNamespace(fetch_at=fetch_at, HISTORY_REQUEST_OFFSET=1)
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    _stub_db(monkeypatch, listing={"00981A": WEEK[0]}, trading_dates=WEEK)
+
+    def fake_trading_dates(start, end):
+        captured["window"] = (start, end)
+        return WEEK
+
+    monkeypatch.setattr(
+        backfill_history.db, "benchmark_trading_dates", fake_trading_dates
+    )
+
+    backfill_history.main(["--etf-id", "00981A", "--date", "2026-07-24"])
+
+    assert captured["window"][0] < dt.date(2026, 7, 24) < captured["window"][1]
+    assert requested == [dt.date(2026, 7, 27)]
