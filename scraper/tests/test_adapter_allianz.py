@@ -83,3 +83,13 @@ def test_fetch_at_sends_iso_date(monkeypatch):
 
     assert captured["Date"] == "2026-06-15"
     assert captured["FundNo"] == allianz._FUND_IDS["00402A"]
+
+
+def test_source_date_reads_nav_date_not_pcf_date():
+    payload = json.loads(FIXTURE.read_text())
+
+    assert allianz.source_date(payload) == dt.date(2026, 7, 8)
+
+
+def test_source_date_none_when_upstream_omits_it():
+    assert allianz.source_date({"Entries": {}}) is None

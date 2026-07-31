@@ -90,9 +90,29 @@ def test_fetch_at_sends_roc_date_and_specific_flag(monkeypatch):
 
     monkeypatch.setattr(uni.requests, "Session", Session)
 
-    holdings = uni.fetch_at(by_id("00981A"), dt.date(2026, 6, 15))
+    holdings, upstream_date = uni.fetch_at(by_id("00981A"), dt.date(2026, 6, 15))
 
     assert captured["date"] == "115/06/15"
     assert captured["specificDate"] is True
     assert captured["fundCode"] == uni._FUND_CODES["00981A"]
     assert holdings[0].stock_id
+    assert upstream_date == dt.date(2026, 7, 8)
+
+
+# 上游自報的資料日：pcf[].TranDate（PostDate 是「適用交易日」，比資料日晚一個交易日）
+
+def test_source_date_reads_tran_date_not_post_date():
+    payload = json.loads(FIXTURE.read_text())
+
+    assert uni.source_date(payload) == dt.date(2026, 7, 8)
+
+
+def test_source_date_parses_aspnet_epoch_in_taipei_time():
+    # 正式站回的是 /Date(ms)/；該 epoch 為台北午夜，用 UTC 解會早一天
+    payload = {"pcf": [{"TranDate": "/Date(1785081600000)/"}]}
+
+    assert uni.source_date(payload) == dt.date(2026, 7, 27)
+
+
+def test_source_date_none_when_upstream_omits_it():
+    assert uni.source_date({"pcf": []}) is None

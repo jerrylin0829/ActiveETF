@@ -84,3 +84,13 @@ def test_fetch_at_sends_token_in_both_places(monkeypatch):
     assert captured["body"]["StartDate"] == "2026-06-15"
     assert captured["params"]["token"] == "tok"
     assert captured["body"]["token"] == "tok"
+
+
+def test_source_date_reads_announcement_date():
+    payload = json.loads(FIXTURE.read_text())
+
+    assert ctbc.source_date(payload) == dt.date(2026, 7, 9)
+
+
+def test_source_date_none_when_upstream_omits_it():
+    assert ctbc.source_date({"Data": []}) is None

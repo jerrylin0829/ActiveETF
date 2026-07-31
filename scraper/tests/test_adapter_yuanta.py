@@ -74,8 +74,19 @@ def test_fetch_at_sends_compact_date(monkeypatch):
 
     monkeypatch.setattr(yuanta.requests, "get", fake_get)
 
-    holdings = yuanta.fetch_at(by_id("00990A"), dt.date(2026, 6, 15))
+    holdings, upstream_date = yuanta.fetch_at(by_id("00990A"), dt.date(2026, 6, 15))
 
     assert captured["ndate"] == "20260615"
     assert captured["ticker"] == "00990A"
     assert holdings[0].stock_id
+    assert upstream_date == dt.date(2026, 7, 9)
+
+
+def test_source_date_reads_pcf_upddate():
+    payload = json.loads(FIXTURE.read_text())
+
+    assert yuanta.source_date(payload) == dt.date(2026, 7, 9)
+
+
+def test_source_date_none_when_upstream_omits_it():
+    assert yuanta.source_date({"PCF": {}}) is None

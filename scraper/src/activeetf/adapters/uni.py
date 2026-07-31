@@ -5,12 +5,15 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+from activeetf.adapters import base
 from activeetf.adapters.base import UA
 from activeetf.models import Holding
 from activeetf.registry import EtfEntry
 
 _PCF_PAGE = "https://www.ezmoney.com.tw/ETF/Transaction/PCF"
 _PCF_API = "https://www.ezmoney.com.tw/ETF/Transaction/GetPCF"
+# 請求 D 拿到的是 D 的前一交易日資料，故目標交易日 T 要請求 T 的次一交易日
+HISTORY_REQUEST_OFFSET = 1
 _FUND_CODES = {
     "00403A": "63YTW",
     "00981A": "49YTW",
@@ -45,7 +48,20 @@ def _roc_today() -> str:
     return _roc(datetime.now(ZoneInfo("Asia/Taipei")).date())
 
 
-def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
+def source_date(payload: dict) -> dt.date | None:
+    """上游自報的資料日 = `pcf[].TranDate`。
+
+    `PostDate` 是該份 PCF「適用的交易日」，比資料日晚一個交易日——用 PostDate
+    核對會剛好把錯位的資料判成正確。
+    """
+    for row in payload.get("pcf") or []:
+        parsed = base.parse_upstream_date(row.get("TranDate"))
+        if parsed:
+            return parsed
+    return None
+
+
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> dict:
     session = requests.Session()
     response = session.get(
         _PCF_PAGE, headers=UA, timeout=30, allow_redirects=False
@@ -67,12 +83,15 @@ def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
         timeout=30,
     )
     response.raise_for_status()
-    return parse(response.json())
+    return response.json()
 
 
 def fetch(entry: EtfEntry) -> list[Holding]:
-    return _fetch_pcf(entry, None)
+    return parse(_fetch_pcf(entry, None))
 
 
-def fetch_at(entry: EtfEntry, date: dt.date) -> list[Holding]:
-    return _fetch_pcf(entry, date)
+def fetch_at(
+    entry: EtfEntry, date: dt.date
+) -> tuple[list[Holding], dt.date | None]:
+    payload = _fetch_pcf(entry, date)
+    return parse(payload), source_date(payload)

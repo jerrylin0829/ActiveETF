@@ -70,3 +70,18 @@ def test_fetch_at_uses_slash_date(monkeypatch):
 
     assert captured["pStrDate"] == "2026/06/15"
     assert captured["pStrFundID"] == "182"
+
+
+def test_source_date_reads_row_sdate():
+    payload = {
+        "d": json.dumps(
+            [{"group": "1", "A": "2330", "C": "16.91", "D": "345,999",
+              "sdate": "2026-07-27"}]
+        )
+    }
+
+    assert fsitc.source_date(payload) == dt.date(2026, 7, 27)
+
+
+def test_source_date_none_when_upstream_returns_no_rows():
+    assert fsitc.source_date({"d": "[]"}) is None

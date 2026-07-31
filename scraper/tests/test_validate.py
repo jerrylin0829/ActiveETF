@@ -1,6 +1,13 @@
+import datetime as dt
+
 import pytest
 from activeetf.models import Holding
-from activeetf.validate import validate, ValidationError
+from activeetf.validate import (
+    SourceDateMismatch,
+    ValidationError,
+    validate,
+    validate_source_date,
+)
 
 KNOWN = {"2330", "2317", "2454"}
 
@@ -44,3 +51,26 @@ def test_rejects_unknown_stock_id_for_tw():
 
 def test_global_universe_skips_id_check():
     validate([_h("NVDA", 80)], prev_count=None, known_ids=KNOWN, universe="global")
+
+
+# 回補專用第四道：上游回傳的資料日必須等於要寫入的 trade_date
+# （2026-07-31 實測：六支 fetch_at 有四支的日期語意與每日路徑不一致）
+
+def test_source_date_equal_to_trade_date_passes():
+    validate_source_date(dt.date(2026, 7, 28), dt.date(2026, 7, 28))
+
+
+def test_source_date_off_by_one_trading_day_is_rejected():
+    with pytest.raises(SourceDateMismatch) as ex:
+        validate_source_date(dt.date(2026, 7, 27), dt.date(2026, 7, 28))
+    assert "2026-07-27" in str(ex.value) and "2026-07-28" in str(ex.value)
+
+
+def test_source_date_mismatch_is_a_validation_error_so_it_never_writes():
+    with pytest.raises(ValidationError):
+        validate_source_date(dt.date(2026, 7, 29), dt.date(2026, 7, 28))
+
+
+def test_missing_source_date_is_rejected_rather_than_assumed_correct():
+    with pytest.raises(SourceDateMismatch):
+        validate_source_date(None, dt.date(2026, 7, 28))

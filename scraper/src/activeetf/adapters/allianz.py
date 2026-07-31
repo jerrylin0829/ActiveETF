@@ -3,11 +3,25 @@ import datetime as dt
 
 import requests
 
+from activeetf.adapters import base
 from activeetf.adapters.base import UA
 from activeetf.models import Holding
 from activeetf.registry import EtfEntry
 
 _API_BASE = "https://etf.allianzgi.com.tw/webapi/api"
+# 請求 D 拿到的是 D 的前一交易日資料（CPcfdate = D、CNavDt = D-1）
+HISTORY_REQUEST_OFFSET = 1
+
+
+def source_date(payload: dict) -> dt.date | None:
+    """上游自報的資料日 = `Entries.CNavDt`。
+
+    `CPcfdate` 等於請求日，用它核對等於什麼都沒檢查。
+    """
+    body = payload.get("Entries") or payload
+    if not isinstance(body, dict):
+        return None
+    return base.parse_upstream_date(body.get("CNavDt"))
 _ORIGIN = "https://etf.allianzgi.com.tw"
 _FUND_IDS = {
     "00984A": "E0001",
@@ -42,7 +56,7 @@ def parse(payload: dict) -> list[Holding]:
     return holdings
 
 
-def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> dict:
     session = requests.Session()
     headers = {
         **UA,
@@ -70,12 +84,15 @@ def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> list[Holding]:
         timeout=30,
     )
     response.raise_for_status()
-    return parse(response.json())
+    return response.json()
 
 
 def fetch(entry: EtfEntry) -> list[Holding]:
-    return _fetch_pcf(entry, None)
+    return parse(_fetch_pcf(entry, None))
 
 
-def fetch_at(entry: EtfEntry, date: dt.date) -> list[Holding]:
-    return _fetch_pcf(entry, date)
+def fetch_at(
+    entry: EtfEntry, date: dt.date
+) -> tuple[list[Holding], dt.date | None]:
+    payload = _fetch_pcf(entry, date)
+    return parse(payload), source_date(payload)
