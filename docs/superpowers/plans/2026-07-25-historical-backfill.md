@@ -6,9 +6,11 @@
 
 > **2026-07-26 Evaluator 修訂（優先於下方原始 Task 8 程式片段）**：00990A 2025-12-15 的 50.80% 股票曝險維持 validation failure，不另訂 global ETF 例外；腳本統計分列已有快照、validation failure、fetch failure。`holding_change` 的 snapshot read 與 replace 改為同 transaction，依序鎖 `holdings_snapshot`、`holding_change`，並補真 DB rollback test。Dashboard 的有限 `scrape_log` 查詢改依 `trade_date DESC, run_at DESC, id DESC`，避免歷史回補紀錄排擠近期告警。
 
+> **2026-07-31 修訂（優先於下方所有 `fetch_at` 程式片段）**：實測發現六支的請求日不全等於資料日（spec §3.1）。`fetch_at` 簽章改為回傳 `(holdings, source_date)`；各 adapter 宣告 `HISTORY_REQUEST_OFFSET`（單位**交易日**）與 `source_date()` 取值欄位；回補腳本以 `request_date_for()` 換算請求日，並在寫入前呼叫 `validate_source_date()`。下方 Task 2–5 的片段只回 `list[Holding]`，已過時。
+
 > **Canary 操作順序**：先執行 `uv run python scripts/backfill_history.py --etf-id 00990A --date 2025-12-15`。單日模式只抓指定 ETF／日期，且不重建全歷史 `holding_change`；確認 50.80% 被記為 validation failure、沒有 snapshot 後，才進入下方完整回補指令。
 
-**Architecture:** `fetch_at` 為**可選能力**——只有支援的 adapter 實作，回補腳本以 `supports_history()` 偵測，每日 pipeline 的 `fetch(entry)` 完全不動。回補腳本按時間正序、跳過已有快照（天然冪等即續跑），三道驗證不放寬。快照入庫後衍生表全部重算（append-only 事實來源的設計在此兌現）。
+**Architecture:** `fetch_at` 為**可選能力**——只有支援的 adapter 實作，回補腳本以 `supports_history()` 偵測，每日 pipeline 的 `fetch(entry)` 完全不動。回補腳本按時間正序、跳過已有快照（天然冪等即續跑），三道驗證不放寬，另加日期語意 gate（交易日位移換算請求日 + 寫入前核對上游資料日，spec §3.1）。快照入庫後衍生表全部重算（append-only 事實來源的設計在此兌現）。
 
 **Tech Stack:** Python 3 + requests + psycopg（scraper）、Postgres view、Next.js（web）、pytest / Vitest。
 

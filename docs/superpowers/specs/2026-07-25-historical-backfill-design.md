@@ -1,6 +1,6 @@
 # 歷史 PCF 持股回補 — 設計文件
 
-日期：2026-07-25
+日期：2026-07-25（2026-07-31 修訂：新增 §3.1 日期語意 gate）
 狀態：已與 User 逐項確認
 關係：主 spec `2026-07-04-active-etf-tracker-design.md` §8 原寫「持股明細自上線日起累積（歷史 PCF 無法回補）」——本設計**推翻該假設**（見 §1 探測結果），主 spec 需同步修訂。
 
@@ -9,6 +9,8 @@
 主 spec 上線時假設歷史 PCF 無法取得，故持股資料僅自 2026-07-13 起累積（10 個交易日）。2026-07-25 實測推翻此假設：**多家投信的 PCF API 接受日期參數並回傳該日真實持股**。
 
 探測方式（`scraper/scripts/probe_history.py`，可重跑）：每家取一檔代表 ETF，比對「最新／一個月前／上市後兩週」三個日期的持股指紋；**唯有歷史日資料與最新日不同才判定支援**——回傳最新日代表日期參數被忽略，不可用於回補。
+
+> **2026-07-31 修訂：這道探測只證明「上游認得日期參數」，不證明「請求日 = 資料日」。** 六支全部通過上述探測，但實測比對 DB 既有快照後，只有國泰、中信兩支的請求日等於資料日（見 §3.1）。判定「可回補」的正確標準是**與既有快照逐檔股數比對**，不是「資料有沒有隨日期變動」。
 
 | 狀態 | 檔數 | 投信 |
 |---|---|---|
@@ -37,10 +39,15 @@
 ```python
 # adapters/base.py
 class HistoricalAdapter(Protocol):
-    def fetch_at(self, entry: EtfEntry, date: dt.date) -> list[Holding]: ...
+    def fetch_at(
+        self, entry: EtfEntry, date: dt.date
+    ) -> tuple[list[Holding], dt.date | None]: ...
 
 def supports_history(module) -> bool:
     return callable(getattr(module, "fetch_at", None))
+
+def history_request_offset(module) -> int:      # 單位：交易日，預設 0
+    return getattr(module, "HISTORY_REQUEST_OFFSET", 0)
 ```
 
 - 僅 uni／yuanta／cathay／fsitc／allianz／ctbc 六個模組實作 `fetch_at`，**重用同模組既有的 `parse()`**，只有請求建構不同
@@ -50,6 +57,28 @@ def supports_history(module) -> bool:
 - 野村日後打通時，只需新增 `fetch_at` 即自動納入回補範圍，無需改回補腳本
 
 **為何不改 `fetch(entry, date=None)`**：13 家不支援日期的 adapter 會被迫接受並忽略該參數，介面謊報能力。可選能力讓「支援歷史」成為可偵測的事實。
+
+**為何 `fetch_at` 要多回一個 `source_date`**（2026-07-31 新增）：只回持股時，日期錯位無法察覺——三道驗證的權重、筆數、代號全部正常。`fetch_at` 一律連同**上游自報的資料日**回傳，由回補腳本在寫入前核對。每日 `fetch(entry)` 的回傳型別不變。
+
+## 3.1 日期語意 gate（2026-07-31 實測後新增，不可省略）
+
+**「上游接受日期參數」不等於「請求日就是資料日」。** 2026-07-31 以正式 DB 既有快照逐檔股數比對六支 adapter：
+
+| adapter | `fetch_at(D)` 的內容實際等於 | `HISTORY_REQUEST_OFFSET` | 核對用的上游欄位 |
+|---|---|---|---|
+| 國泰 `cathay` | `D` | 0 | 表頭「YYYY/MM/DD基金持股權重」 |
+| 中信 `ctbc` | `D` | 0 | `Data[].公告日` |
+| 統一 `uni` | `D` 的前一交易日 | +1 | `pcf[].TranDate` |
+| 第一金 `fsitc` | `D` 的前一交易日 | +1 | 各列 `sdate` |
+| 安聯 `allianz` | `D` 的前一交易日 | +1 | `Entries.CNavDt` |
+| 元大 `yuanta` | `D` 的次一交易日 | −1 | `PCF.upddate` |
+
+規則：
+
+1. **請求日以交易日位移換算**：`request_date = 交易日曆[index(目標交易日) + HISTORY_REQUEST_OFFSET]`。**不可用 `目標日 ± 1 day`**——週末與連假會錯開（例：目標 2026-07-24 週五、位移 +1，正確請求日是 07-27 週一）。位移後超出日曆範圍時不得猜日期，記 fail 並略過該日。
+2. **寫入前核對資料日**：`validate_source_date(source_date, trade_date)`，不相等或取不到一律 `SourceDateMismatch`（`ValidationError` 子類，故不寫入且計入驗證失敗）。
+3. **核對欄位由各 adapter 自行宣告**，因為每日路徑的「as-of 語意」本來就因投信而異：中信 `DB[T]` 對應公告日 `T`（淨值日 `T-1`），安聯 `DB[T]` 卻對應 `CNavDt = T`。統一必須用 `TranDate` 而非 `PostDate`——`PostDate` 等於請求日，用它核對等於什麼都沒檢查。
+4. **位移只是取得正確資料的手段，斷言才是安全網**。既有快照僅自 2026-07-13 起，回補要回到 2025 年的上市日，那段期間上游的發布時程無法用 DB 驗證；若某段歷史的偏移與今日不同，斷言會讓該日失敗而不是寫入錯資料。
 
 ## 4. 回補流程
 
@@ -65,6 +94,8 @@ def supports_history(module) -> bool:
 - 預估：12 檔 × 各自上市至今交易日 ≈ 2,500–3,000 次請求、約 2 小時
 
 ### 4.3 驗證（不放寬）
+
+**第四道（回補專用）**：`validate_source_date(上游自報資料日, 目標 trade_date)`，見 §3.1。先於三道驗證執行——日期不對時其餘檢查沒有意義。
 
 三道驗證原封套用於歷史資料：權重總和 70–101%、筆數 vs 前日無突變、股票代號存在於 `stock_info`。任一不過即**跳過該日、不寫入**，並記入 `scrape_log`（`trade_date` 為該歷史日）。錯資料比缺資料危險，此原則不因回補而放寬。
 
@@ -118,6 +149,9 @@ from holdings_snapshot group by etf_id;
 ## 8. 測試
 
 - **`fetch_at` 各家**：以錄製的 fixture 驗證日期格式轉換與 parse 正確（不對真實站台發測試請求）
+- **`source_date` 各家**（2026-07-31 新增）：以 fixture 驗證取到的是 §3.1 指定的欄位；欄位缺漏時回 `None` 而非猜測。統一另需驗證 `/Date(ms)/` 以**台北時區**解析——該 epoch 是台北午夜，用 UTC 解會早一天
+- **請求日換算**（2026-07-31 新增）：位移必須跨過週末與連假（週五 +1 = 下週一）、位移後超出日曆範圍回 `None`
+- **日期 gate**（2026-07-31 新增）：資料日不等於目標日時不得寫入且計為驗證失敗；**相鄰兩日持股完全相同時仍須擋住**（內容比對在這種情況下沒有鑑別力，只有資料日能擋）；canary 模式的日曆視窗需涵蓋目標日前後的交易日
 - **`supports_history()`**：有／無 `fetch_at` 的模組判別正確
 - **回補腳本純函式**：交易日序列過濾（≥ 上市日）、跳過既有快照的冪等判斷、輪替排程順序
 - **驗證整合**：歷史資料同樣走三道驗證，不過關不寫入（以假資料整合測試，`_T` 假代號、無 `SUPABASE_DB_URL` 自動 skip）
