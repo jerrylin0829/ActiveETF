@@ -1,8 +1,10 @@
 # Generator handoff — 新倉雷達改為「建倉脈絡」股票分組敘事
 
-Planner：Claude Code ｜ 日期：2026-07-25 ｜ 目標分支前綴：`codex/`
+Planner：Claude Code ｜ 日期：2026-07-25（2026-07-31 修訂）｜ 目標分支前綴：`codex/`
 
-**狀態：⚖️ 待裁決 6 項，User 拍板前不得開工。**
+**狀態：已核可，待 spec 落地後可開工。** 2026-07-31 User 裁決：六項全部採 Planner 建議——#0 先改 spec（Planner 另開 `planner/spec-radar-narrative` 分支，不開 PR）、#1 股票分組、#2 維持 20 交易日、#3 脈絡顯示 TRIM、#4 四象限頁籤、#5 金額用事件當日價、#6 本片不做彙總報酬（**另開一片做回合成本基礎，順帶產出估算均價**）。
+
+下方 ⚖️ 標記保留原始論證脈絡，全部視為已裁決，Generator 照做勿重新設計。
 
 競品觀察來源：`https://www.etfinfo.tw/active/tracking`（2026-07-25 實地檢視）。對方把「哪些股票近期被主動 ETF 建倉」做成跨 ETF 的時序敘事，可讀性明顯優於我方現行平表；但對方**無基準相對報酬、無海外持股**，那兩項是我方要保留並突出的差異。
 
@@ -22,7 +24,16 @@ Planner：Claude Code ｜ 日期：2026-07-25 ｜ 目標分支前綴：`codex/`
   - 追買 = 該股票的任一回合在 `entry_date` 之後至少有一筆 ADD
   Planner 建議：採用，頁籤標籤帶檔數（`多 ETF 追買 32`）。
 - ⚖️ **#5 金額估算**：`估算新進 = Σ(NEW shares_delta × 該事件日 close)`、`估算加碼 = Σ(ADD shares_delta × 該事件日 close)`，用 `formatYi` 顯示億。**用事件當日收盤價，不用最新收盤價**（對方用最新價，會讓金額隨行情漂移，失去「當時投入多少」的意義）。任一事件缺價 → 該欄位 `—`（沿用 `aggregateMoves` 的 `hasMissingClose` null 傳播模式）。海外股票無 `stock_price` → 一律 `—`。Planner 建議：採用。
-- ⚖️ **#6 不做股票層級的彙總超額報酬**：各檔 ETF 的 `entry_date` 不同，跨 ETF 平均超額報酬沒有可辯護的定義。超額報酬只留在**每檔 ETF 那一列**（即現行 `open_position.excess_return_pct`，語意不變）。Planner 建議：採用；組標題不放任何報酬數字。
+- ⚖️ **#6 本片不做股票層級的彙總超額報酬**（但理由不是「算不出來」，見下）。超額報酬只留在**每檔 ETF 那一列**（即現行 `open_position.excess_return_pct`，語意不變），組標題不放任何報酬數字。
+
+  **兩種彙總法要分開看：**
+  - **簡單平均各 ETF 的超額報酬 → 確實不該做。** 各檔 `entry_date` 不同，等於把不同期間的報酬相加平均；那不是任何一個部位的報酬，沒有人能持有出這個數字。
+  - **金額加權（money-weighted）→ 有明確意義，只是本片做不到。** 「主動圈整體在這檔股票上的持倉，相對基準賺賠多少」是可辯護且有價值的數字。但它需要**每個回合的成本基礎**（NEW + ADD + TRIM 各事件的股數 × 當日價），而現行 `open_position.excess_return_pct` 是 **entry_date 錨定**的——只看建倉日到今天，不管後來加碼多少。兩者是不同口徑，不能混用。
+
+  **因此本片不做的真正理由是成本與口徑一致性**：(1) 需要新的成本基礎計算，屬 pipeline 工作（違反本片「不改 pipeline」的 Non-goal）；(2) spec §6 的選股勝率也是回合／entry-anchored，貿然引入第二套報酬口徑會讓站上同時存在兩種「超額報酬」，讀者無從分辨。
+  ✅ **User 裁決（2026-07-31）：本片不做，另開一片**做「回合成本基礎」（同時產出 etfinfo 那樣的「估算均價」），再回頭把彙總數字掛到組標題。
+
+  ⚠️ **交給那一片的伏筆——命名必須先定。** 本項自己警告過「站上不得同時存在兩種超額報酬口徑」，而那一片產出的正是第二種口徑，若不先命名就是本項預言的坑。既有（entry-anchored）稱「**建倉以來超額報酬**」，新增（money-weighted）稱「**金額加權超額報酬**」——對應標準術語 money-weighted / time-weighted。該片 spec 第一段即須處理此命名。詳見 `docs/superpowers/specs/2026-07-31-radar-build-narrative-design.md` §6。
 
 ## Scope
 
@@ -82,4 +93,4 @@ Planner：Claude Code ｜ 日期：2026-07-25 ｜ 目標分支前綴：`codex/`
 
 ## Handoff Prompt
 
-請以 Generator 身分依本 handoff 實作（Generator 可為 Claude 或 Codex，須與後續 Evaluator 不同 session）。**六項 ⚖️ 待裁決由 User 拍板後才開工。**完成後開 PR（base `main`），PR body 含變更摘要、驗證輸出、真資料 smoke 證據（含一檔股票的脈絡對帳）、已知風險與後續工作。不對正式 DB 執行語句。不得在未驗證時宣稱完成。
+請以 Generator 身分依本 handoff 實作（Generator 可為 Claude 或 Codex，須與後續 Evaluator 不同 session）。**六項設計決策已於 2026-07-31 由 User 全數核可，照做勿重新設計；待 spec commit 落地後開工。**完成後開 PR（base `main`），PR body 含變更摘要、驗證輸出、真資料 smoke 證據（含一檔股票的脈絡對帳）、已知風險與後續工作。不對正式 DB 執行語句。不得在未驗證時宣稱完成。
