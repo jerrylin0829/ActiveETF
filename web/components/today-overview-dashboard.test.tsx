@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { TodayOverviewDashboard } from "@/components/today-overview-dashboard";
@@ -44,32 +45,62 @@ const overview: TodayOverviewViewModel = {
       },
     ],
   },
-  radarPositions: [
+  radarNarratives: [
     {
-      etfId: "00980A",
-      etfName: "主動野村臺灣優選",
-      issuer: "野村",
       stockId: "2330",
       stockName: "台積電",
-      entryDate: "2026-07-14",
-      holdingTradingDays: 1,
-      sharedEtfCount: 2,
-      sharedSignal: "2 檔 ETF 近期同步建倉",
-      excessReturnPct: 12.334,
-      excessReturnNote: null,
+      industry: "半導體業",
+      etfCount: 2,
+      issuerCount: 2,
+      followUpCount: 1,
+      entryValueTwd: 1000000,
+      addValueTwd: 200000,
+      segment: "multi_add",
+      legs: [
+        {
+          etfId: "00980A",
+          etfName: "主動野村臺灣優選",
+          issuer: "野村",
+          entryDate: "2026-07-14",
+          holdingTradingDays: 1,
+          excessReturnPct: 12.334,
+          excessReturnNote: null,
+          followUps: [
+            { tradeDate: "2026-07-15", changeType: "ADD", sharesDelta: 1000, close: 200 },
+          ],
+        },
+        {
+          etfId: "00981A",
+          etfName: "主動統一台股增長",
+          issuer: "統一",
+          entryDate: "2026-07-14",
+          holdingTradingDays: 1,
+          excessReturnPct: 4,
+          excessReturnNote: null,
+          followUps: [],
+        },
+      ],
     },
     {
-      etfId: "00988A",
-      etfName: "主動統一全球創新",
-      issuer: "統一",
       stockId: "NVDA US",
       stockName: "NVDA US",
-      entryDate: "2026-07-14",
-      holdingTradingDays: 1,
-      sharedEtfCount: 1,
-      sharedSignal: null,
-      excessReturnPct: null,
-      excessReturnNote: "不適用",
+      industry: null,
+      etfCount: 1,
+      issuerCount: 1,
+      followUpCount: 0,
+      entryValueTwd: null,
+      addValueTwd: null,
+      segment: "single_new",
+      legs: [{
+        etfId: "00988A",
+        etfName: "主動統一全球創新",
+        issuer: "統一",
+        entryDate: "2026-07-14",
+        holdingTradingDays: 1,
+        excessReturnPct: null,
+        excessReturnNote: "不適用",
+        followUps: [],
+      }],
     },
   ],
   warnings: [
@@ -114,20 +145,18 @@ describe("TodayOverviewDashboard", () => {
 
     const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
     expect(within(radar).getByText("+12.33%")).toBeInTheDocument(); // |excess| >= 10 => colored
-    expect(within(radar).getByText("不適用")).toBeInTheDocument(); // foreign holding
-    expect(within(radar).getByText("2 檔 ETF 近期同步建倉")).toBeInTheDocument();
-    expect(within(radar).getByRole("link", { name: /NVDA US/ })).toHaveAttribute(
-      "href",
-      "/stock/NVDA%20US",
-    );
+    expect(within(radar).getByText("2 檔 ETF / 2 家投信建倉，後續加碼 1 筆")).toBeInTheDocument();
+    expect(within(radar).getByText(/後續加碼列為脈絡，不另計為一次建倉/)).toBeInTheDocument();
     expect(radar).toHaveClass("min-w-0");
     expect(container.querySelector("main > div")).toHaveClass("grid-cols-[minmax(0,1fr)]");
   });
 
-  it("海外股票名稱 fallback 成代號時只顯示一次", () => {
+  it("海外股票名稱 fallback 成代號時只顯示一次", async () => {
+    const user = userEvent.setup();
     render(<TodayOverviewDashboard overview={overview} />);
 
     const radar = screen.getByRole("region", { name: "新倉追蹤雷達" });
+    await user.click(within(radar).getByRole("tab", { name: "單 ETF 新進 1" }));
     expect(within(radar).getByRole("link", { name: "NVDA US" })).toHaveTextContent(
       /^NVDA US$/,
     );

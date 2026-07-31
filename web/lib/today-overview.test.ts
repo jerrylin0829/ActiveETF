@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCollectiveMovements,
   buildOverviewDataGapWarnings,
+  buildRadarNarratives,
   buildRadarPositions,
   filterChangeWall,
   formatWeightDelta,
@@ -246,6 +247,203 @@ describe("today overview radar", () => {
     expect(window).toHaveLength(20);
     expect(window[0]).toBe(longHistory[60]);
     expect(window.at(-1)).toBe(selectedDate);
+  });
+
+  it("groups open positions by stock and orders ETF legs and follow-ups chronologically", () => {
+    const positions = [
+      {
+        etfId: "B",
+        etfName: "B 基金",
+        issuer: "同一家",
+        stockId: "2330",
+        stockName: "台積電",
+        industry: "半導體業",
+        entryDate: "2026-07-10",
+        holdingTradingDays: 2,
+        sharedEtfCount: 2,
+        sharedSignal: "2 檔 ETF 近期同步建倉",
+        excessReturnPct: -12.2,
+        excessReturnNote: null,
+      },
+      {
+        etfId: "A",
+        etfName: "A 基金",
+        issuer: "同一家",
+        stockId: "2330",
+        stockName: "台積電",
+        industry: "半導體業",
+        entryDate: "2026-07-08",
+        holdingTradingDays: 4,
+        sharedEtfCount: 2,
+        sharedSignal: "2 檔 ETF 近期同步建倉",
+        excessReturnPct: 11.1,
+        excessReturnNote: null,
+      },
+    ];
+    const events: ChangeEvent[] = [
+      { ...baseEvent, etfId: "B", etfName: "B 基金", issuer: "同一家", tradeDate: "2026-07-10", changeType: "NEW", sharesDelta: 10, close: 110 },
+      { ...baseEvent, etfId: "A", etfName: "A 基金", issuer: "同一家", tradeDate: "2026-07-08", changeType: "NEW", sharesDelta: 20, close: 100 },
+      { ...baseEvent, etfId: "A", etfName: "A 基金", issuer: "同一家", tradeDate: "2026-07-12", changeType: "TRIM", sharesDelta: -3, close: 120 },
+      { ...baseEvent, etfId: "A", etfName: "A 基金", issuer: "同一家", tradeDate: "2026-07-09", changeType: "ADD", sharesDelta: 5, close: 105 },
+      { ...baseEvent, etfId: "B", etfName: "B 基金", issuer: "同一家", tradeDate: "2026-07-11", changeType: "ADD", sharesDelta: 4, close: 115 },
+    ];
+
+    const narratives = buildRadarNarratives(positions, events);
+
+    expect(narratives).toHaveLength(1);
+    expect(narratives[0]).toMatchObject({
+      stockId: "2330",
+      stockName: "台積電",
+      industry: "半導體業",
+      etfCount: 2,
+      issuerCount: 1,
+      followUpCount: 2,
+      entryValueTwd: 3100,
+      addValueTwd: 985,
+      segment: "multi_add",
+    });
+    expect(narratives[0].legs.map((leg) => leg.etfId)).toEqual(["A", "B"]);
+    expect(narratives[0].legs[0].followUps.map((event) => [event.tradeDate, event.changeType])).toEqual([
+      ["2026-07-09", "ADD"],
+      ["2026-07-12", "TRIM"],
+    ]);
+  });
+
+  it("classifies all four segments while TRIM remains context only", () => {
+    const makePosition = (etfId: string, stockId: string, sharedEtfCount: number) => ({
+      etfId,
+      etfName: `${etfId} 基金`,
+      issuer: etfId,
+      stockId,
+      stockName: stockId,
+      industry: null,
+      entryDate: "2026-07-10",
+      holdingTradingDays: 2,
+      sharedEtfCount,
+      sharedSignal: sharedEtfCount >= 2 ? `${sharedEtfCount} 檔 ETF 近期同步建倉` : null,
+      excessReturnPct: null,
+      excessReturnNote: "不適用" as const,
+    });
+    const positions = [
+      makePosition("A", "1000", 2),
+      makePosition("B", "1000", 2),
+      makePosition("C", "2000", 1),
+      makePosition("D", "3000", 2),
+      makePosition("E", "3000", 2),
+      makePosition("F", "4000", 1),
+    ];
+    const events: ChangeEvent[] = positions.flatMap((position) => [
+      { ...baseEvent, etfId: position.etfId, stockId: position.stockId, stockName: position.stockName, tradeDate: position.entryDate, changeType: "NEW" as const, close: 10 },
+      ...(position.stockId === "1000" || position.stockId === "2000"
+        ? [{ ...baseEvent, etfId: position.etfId, stockId: position.stockId, stockName: position.stockName, tradeDate: "2026-07-11", changeType: "ADD" as const, close: 10 }]
+        : position.stockId === "3000"
+          ? [{ ...baseEvent, etfId: position.etfId, stockId: position.stockId, stockName: position.stockName, tradeDate: "2026-07-11", changeType: "TRIM" as const, sharesDelta: -1, close: 10 }]
+          : []),
+    ]);
+
+    const narratives = buildRadarNarratives(positions, events);
+
+    expect(narratives.map((narrative) => [narrative.stockId, narrative.segment])).toEqual([
+      ["1000", "multi_add"],
+      ["3000", "multi_new"],
+      ["2000", "single_add"],
+      ["4000", "single_new"],
+    ]);
+    expect(narratives).toHaveLength(4);
+    expect(narratives.find((narrative) => narrative.stockId === "3000")?.followUpCount).toBe(0);
+  });
+
+  it("uses event-day closes, propagates missing prices, and never sums excess returns", () => {
+    const positions = [
+      {
+        etfId: "A",
+        etfName: "A 基金",
+        issuer: "甲",
+        stockId: "2330",
+        stockName: "台積電",
+        industry: "半導體業",
+        entryDate: "2026-07-10",
+        holdingTradingDays: 2,
+        sharedEtfCount: 1,
+        sharedSignal: null,
+        excessReturnPct: 15,
+        excessReturnNote: null,
+      },
+    ];
+
+    const [narrative] = buildRadarNarratives(positions, [
+      { ...baseEvent, etfId: "A", tradeDate: "2026-07-10", changeType: "NEW", sharesDelta: 2, close: 100 },
+      { ...baseEvent, etfId: "A", tradeDate: "2026-07-11", changeType: "ADD", sharesDelta: 3, close: null },
+      { ...baseEvent, etfId: "A", tradeDate: "2026-07-12", changeType: "TRIM", sharesDelta: -1, close: 999 },
+    ]);
+
+    expect(narrative.entryValueTwd).toBe(200);
+    expect(narrative.addValueTwd).toBeNull();
+    expect(narrative.legs[0].excessReturnPct).toBe(15);
+    expect(narrative).not.toHaveProperty("excessReturnPct");
+  });
+
+  it("keeps overseas amount estimates unavailable even without follow-up events", () => {
+    const positions = [{
+      etfId: "A",
+      etfName: "全球基金",
+      issuer: "甲",
+      stockId: "NVDA US",
+      stockName: "NVIDIA",
+      industry: null,
+      entryDate: "2026-07-10",
+      holdingTradingDays: 2,
+      sharedEtfCount: 1,
+      sharedSignal: null,
+      excessReturnPct: null,
+      excessReturnNote: "不適用" as const,
+    }];
+
+    const [narrative] = buildRadarNarratives(positions, [
+      { ...baseEvent, etfId: "A", stockId: "NVDA US", stockName: "NVIDIA", tradeDate: "2026-07-10", changeType: "NEW", close: null },
+    ]);
+
+    expect(narrative).toMatchObject({ entryValueTwd: null, addValueTwd: null });
+  });
+
+  it("keeps entry value unavailable when the matching NEW event is absent", () => {
+    const positions = [{
+      etfId: "A",
+      etfName: "A 基金",
+      issuer: "甲",
+      stockId: "2330",
+      stockName: "台積電",
+      industry: "半導體業",
+      entryDate: "2026-07-10",
+      holdingTradingDays: 2,
+      sharedEtfCount: 1,
+      sharedSignal: null,
+      excessReturnPct: 1,
+      excessReturnNote: null,
+    }];
+
+    const [narrative] = buildRadarNarratives(positions, []);
+
+    expect(narrative.entryValueTwd).toBeNull();
+    expect(narrative.addValueTwd).toBe(0);
+  });
+
+  it("keeps follow-ups from an exited round out of a later NEW round", () => {
+    const events: ChangeEvent[] = [
+      { ...baseEvent, etfId: "A", tradeDate: "2026-07-01", changeType: "NEW", close: 80 },
+      { ...baseEvent, etfId: "A", tradeDate: "2026-07-08", changeType: "EXIT", close: 90 },
+      { ...baseEvent, etfId: "A", tradeDate: "2026-07-09", changeType: "ADD", close: 95 },
+      { ...baseEvent, etfId: "A", tradeDate: "2026-07-10", changeType: "NEW", close: 100 },
+      { ...baseEvent, etfId: "A", tradeDate: "2026-07-11", changeType: "ADD", close: 105 },
+    ];
+    const positions = buildRadarPositions(events, tradingDates, "2026-07-14");
+
+    const [narrative] = buildRadarNarratives(positions, events);
+
+    expect(narrative.legs[0].entryDate).toBe("2026-07-10");
+    expect(narrative.legs[0].followUps).toEqual([
+      { tradeDate: "2026-07-11", changeType: "ADD", sharesDelta: 1000, close: 105 },
+    ]);
   });
 });
 

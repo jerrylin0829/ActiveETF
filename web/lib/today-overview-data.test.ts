@@ -254,33 +254,94 @@ describe("fetchTodayOverview", () => {
     });
   });
 
-  it("passes cached holding_days through to the latest-day radar", async () => {
-    installSupabaseDouble({
-      holding_change: [{
-        etf_id: "00987A",
-        trade_date: "2026-07-14",
-        stock_id: "2486",
-        change_type: "NEW",
-        shares_delta: 1000,
-        weight_delta_pct: 1,
-        etf: { name: "台新優勢成長", issuer: "台新" },
-      }],
+  it("builds radar narratives with cached holding days, industry, and event-day closes", async () => {
+    const executions = installSupabaseDouble({
+      dashboard_holding_snapshot_dates: [
+        { trade_date: "2026-07-10" },
+        { trade_date: "2026-07-11" },
+        { trade_date: "2026-07-14" },
+      ],
+      holding_change: [
+        {
+          etf_id: "00987A",
+          trade_date: "2026-07-10",
+          stock_id: "2486",
+          change_type: "NEW",
+          shares_delta: 1000,
+          weight_delta_pct: 1,
+          etf: { name: "台新優勢成長", issuer: "台新" },
+        },
+        {
+          etf_id: "00987A",
+          trade_date: "2026-07-11",
+          stock_id: "2486",
+          change_type: "ADD",
+          shares_delta: 500,
+          weight_delta_pct: 0.5,
+          etf: { name: "台新優勢成長", issuer: "台新" },
+        },
+        {
+          etf_id: "00987A",
+          trade_date: "2026-07-14",
+          stock_id: "2486",
+          change_type: "TRIM",
+          shares_delta: -100,
+          weight_delta_pct: -0.1,
+          etf: { name: "台新優勢成長", issuer: "台新" },
+        },
+      ],
+      stock_info: [{ stock_id: "2486", name: "一詮", industry: "電子零組件業" }],
+      stock_price: [
+        { stock_id: "2486", trade_date: "2026-07-10", close: 100 },
+        { stock_id: "2486", trade_date: "2026-07-11", close: 110 },
+        { stock_id: "2486", trade_date: "2026-07-14", close: 120 },
+      ],
       open_position: [{
         etf_id: "00987A",
         stock_id: "2486",
-        entry_date: "2026-07-14",
+        entry_date: "2026-07-10",
         as_of_date: "2026-07-14",
-        holding_days: 0,
-        excess_return_pct: 0,
+        holding_days: 2,
+        excess_return_pct: 3.5,
       }],
     });
 
     const result = await fetchTodayOverview({ date: "2026-07-14" });
 
-    expect(result.radarPositions[0]).toMatchObject({
-      holdingTradingDays: 0,
-      excessReturnPct: 0,
+    expect(result.radarNarratives[0]).toMatchObject({
+      stockId: "2486",
+      stockName: "一詮",
+      industry: "電子零組件業",
+      entryValueTwd: 100000,
+      addValueTwd: 55000,
+      followUpCount: 1,
+      segment: "single_add",
     });
+    expect(result.radarNarratives[0].legs[0]).toMatchObject({
+      holdingTradingDays: 2,
+      excessReturnPct: 3.5,
+    });
+    expect(result.radarNarratives[0].legs[0].followUps.map((event) => event.changeType)).toEqual([
+      "ADD",
+      "TRIM",
+    ]);
+
+    const radarQuery = executions.find(
+      (execution) =>
+        execution.table === "holding_change" &&
+        execution.filters.some(
+          (filter) => filter.kind === "in" && filter.column === "change_type",
+        ),
+    );
+    expect(radarQuery?.filters).toContainEqual({
+      kind: "in",
+      column: "change_type",
+      value: ["NEW", "EXIT", "ADD", "TRIM"],
+    });
+    const priceQueries = executions.filter((execution) => execution.table === "stock_price");
+    expect(priceQueries.every((query) => query.filters.some(
+      (filter) => filter.kind === "gte" && filter.column === "trade_date" && filter.value === "2026-07-10",
+    ))).toBe(true);
   });
 
   it("pages open_position with deterministic primary-key ordering", async () => {
