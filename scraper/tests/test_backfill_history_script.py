@@ -644,3 +644,45 @@ def test_ordinary_validation_failure_still_exits_zero(monkeypatch):
 
     assert writes == []
     assert all(log[2] == "fail" for log in logs)
+
+
+def test_expected_source_date_follows_the_per_etf_source_offset(monkeypatch):
+    """00988A 這類基金的每日路徑存的是 T-1 的資料，斷言必須照同一語意。"""
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: (_holdings(), WEEK[0]),  # 資料日 = 目標的前一交易日
+        HISTORY_REQUEST_OFFSET=1,
+        HISTORY_SOURCE_OFFSET=-1,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, logs = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[1]}, trading_dates=WEEK
+    )
+
+    backfill_history.main([])
+
+    assert [date for _, date, _ in writes] == [WEEK[1]]
+    assert logs[0][2] == "ok"
+
+
+def test_source_offset_zero_still_requires_the_date_to_equal_the_target(monkeypatch):
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: (_holdings(), WEEK[0]),
+        HISTORY_REQUEST_OFFSET=1,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, _ = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[1]}, trading_dates=WEEK
+    )
+
+    with pytest.raises(SystemExit):
+        backfill_history.main([])
+
+    assert writes == []

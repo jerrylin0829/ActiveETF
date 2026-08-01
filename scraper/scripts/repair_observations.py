@@ -66,9 +66,12 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(f"  {etf_id} {trade_date}：交易日曆換算不出請求日，跳過")
             skipped += 1
             continue
+        expected_source = request_date_for(
+            calendar, trade_date, adapter_base.history_source_offset(module, etf_id)
+        )
         try:
             holdings, upstream_date = module.fetch_at(entry, request_date)
-            validate_source_date(upstream_date, trade_date)
+            validate_source_date(upstream_date, expected_source)
         except SourceDateMismatch as ex:
             print(f"  {etf_id} {trade_date}：{ex}，跳過")
             skipped += 1

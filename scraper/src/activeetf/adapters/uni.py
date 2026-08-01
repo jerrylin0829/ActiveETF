@@ -14,8 +14,9 @@ _PCF_PAGE = "https://www.ezmoney.com.tw/ETF/Transaction/PCF"
 _PCF_API = "https://www.ezmoney.com.tw/ETF/Transaction/GetPCF"
 # 請求 D 拿到的是 D 的前一交易日資料，故目標交易日 T 要請求 T 的次一交易日
 HISTORY_REQUEST_OFFSET = 1
-# 全球型的 00988A 又多一個交易日的時差（2026-07-31 實測，台股型的兩檔為 +1）
-HISTORY_REQUEST_OFFSETS = {"00988A": 2}
+# 全球型的 00988A：每日路徑存的是 TranDate = T-1 的那份 PCF（2026-07-31 實測，
+# 內容與 DB 逐檔相符）。請求位移與台股型相同，但該有的資料日是 T-1。
+HISTORY_SOURCE_OFFSETS = {"00988A": -1}
 _FUND_CODES = {
     "00403A": "63YTW",
     "00981A": "49YTW",

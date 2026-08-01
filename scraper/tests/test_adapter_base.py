@@ -48,13 +48,22 @@ def test_每支_adapter_的位移與_2026_07_31_實測相符():
     }
 
 
-def test_統一的全球型_00988A_比台股型多一個交易日():
-    """2026-07-31 實測：00988A 以 +1 取得的一律是目標日的前一交易日，需 +2。"""
+def test_source_offset_defaults_to_zero():
+    assert base.history_source_offset(types.SimpleNamespace(), "00981A") == 0
+
+
+def test_統一的全球型_00988A_的每日路徑存的是前一交易日的資料():
+    """2026-07-31 實測：DB[T] 的內容等於 TranDate = T-1 的那份 PCF。
+
+    請求位移與台股型相同（+1），但「該有的資料日」是 T-1 而不是 T——
+    斷言必須照每日路徑的語意，否則整檔都會被判成日期不符。
+    """
     module = base.load("uni")
 
-    assert base.history_request_offset(module, "00988A") == 2
-    assert base.history_request_offset(module, "00981A") == 1
-    assert base.history_request_offset(module, "00403A") == 1
+    assert base.history_request_offset(module, "00988A") == 1
+    assert base.history_source_offset(module, "00988A") == -1
+    assert base.history_source_offset(module, "00981A") == 0
+    assert base.history_source_offset(module, "00403A") == 0
 
 
 # 各家日期字串格式不同，共用解析器；台北時區是必要的（見 uni 的 /Date(ms)/）

@@ -56,6 +56,19 @@ def history_request_offset(module: object, etf_id: str | None = None) -> int:
     return getattr(module, "HISTORY_REQUEST_OFFSET", 0)
 
 
+def history_source_offset(module: object, etf_id: str | None = None) -> int:
+    """該 ETF 的 `trade_date` **應該**對應到哪一個上游資料日，單位為交易日。
+
+    預設 0（資料日等於 trade_date）。少數基金的每日路徑本來就存著前一交易日的
+    資料（實測：統一的全球型 00988A），斷言必須照每日路徑的語意走，否則回補
+    出來的歷史會與既有快照差一天。
+    """
+    per_etf = getattr(module, "HISTORY_SOURCE_OFFSETS", {})
+    if etf_id is not None and etf_id in per_etf:
+        return per_etf[etf_id]
+    return getattr(module, "HISTORY_SOURCE_OFFSET", 0)
+
+
 def unique_upstream_date(values: Iterable[object]) -> dt.date | None:
     """多列都帶資料日時要求一致；不一致代表上游狀態不明，回 None 不猜。"""
     parsed = {date for date in map(parse_upstream_date, values) if date}

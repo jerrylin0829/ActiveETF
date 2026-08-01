@@ -179,8 +179,13 @@ def main(argv: Sequence[str] | None = None) -> None:
                     f"交易日曆內找不到 {trade_date} 對應的請求日"
                     f"（位移 {adapter_base.history_request_offset(module, etf_id)} 個交易日）"
                 )
+            expected_source = request_date_for(
+                trading_dates,
+                trade_date,
+                adapter_base.history_source_offset(module, etf_id),
+            )
             holdings, upstream_date = module.fetch_at(entry, request_date)
-            validate_source_date(upstream_date, trade_date)
+            validate_source_date(upstream_date, expected_source)
             previous_date = db.latest_snapshot_date(etf_id, before=trade_date)
             previous_count = (
                 db.snapshot_count(etf_id, previous_date)
