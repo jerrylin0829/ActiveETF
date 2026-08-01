@@ -11,6 +11,7 @@ export type ChangeEvent = {
   tradeDate: string;
   stockId: string;
   stockName: string;
+  industry?: string | null;
   changeType: ChangeType;
   sharesDelta: number;
   weightDeltaPct: number;
@@ -44,6 +45,7 @@ export type RadarPosition = {
   issuer: string;
   stockId: string;
   stockName: string;
+  industry: string | null;
   entryDate: string;
   holdingTradingDays: number;
   sharedEtfCount: number;
@@ -51,6 +53,39 @@ export type RadarPosition = {
   excessReturnPct: number | null;
   // "—": 歷史日期或快取未涵蓋（買進至今報酬只提供最新交易日）；"不適用": 海外/缺價
   excessReturnNote: "不適用" | "—" | null;
+};
+
+export type RadarFollowUp = {
+  tradeDate: string;
+  changeType: "ADD" | "TRIM";
+  sharesDelta: number;
+  close?: number | null;
+};
+
+export type RadarEtfLeg = {
+  etfId: string;
+  etfName: string;
+  issuer: string;
+  entryDate: string;
+  holdingTradingDays: number;
+  excessReturnPct: number | null;
+  excessReturnNote: RadarPosition["excessReturnNote"];
+  followUps: RadarFollowUp[];
+};
+
+export type RadarSegment = "multi_add" | "single_add" | "multi_new" | "single_new";
+
+export type RadarNarrative = {
+  stockId: string;
+  stockName: string;
+  industry: string | null;
+  etfCount: number;
+  issuerCount: number;
+  followUpCount: number;
+  entryValueTwd: number | null;
+  addValueTwd: number | null;
+  segment: RadarSegment;
+  legs: RadarEtfLeg[];
 };
 
 export type RangeOption = {
@@ -67,7 +102,8 @@ export type TodayOverviewViewModel = {
   rangeOptions: RangeOption[];
   changeEvents: ChangeEvent[];
   collective: CollectiveMovements;
-  radarPositions: RadarPosition[];
+  radarNarratives: RadarNarrative[];
+  radarError: string | null;
   warnings: DataGapWarning[];
   error: string | null;
 };
@@ -329,6 +365,7 @@ export function buildRadarPositions(
         issuer: event.issuer,
         stockId: event.stockId,
         stockName: event.stockName,
+        industry: event.industry ?? null,
         entryDate: event.tradeDate,
         holdingTradingDays:
           cached?.holdingDays ?? holdingTradingDays(tradingDates, event.tradeDate, selectedDate),
@@ -358,6 +395,127 @@ export function buildRadarPositions(
       const stockDiff = a.stockId.localeCompare(b.stockId);
       return stockDiff !== 0 ? stockDiff : a.etfId.localeCompare(b.etfId);
     });
+}
+
+function eventValue(events: ChangeEvent[]): number | null {
+  let total = 0;
+  for (const event of events) {
+    if (
+      event.close === null ||
+      event.close === undefined ||
+      !Number.isFinite(event.close) ||
+      !Number.isFinite(event.sharesDelta)
+    ) {
+      return null;
+    }
+    total += event.sharesDelta * event.close;
+  }
+  return total;
+}
+
+export function buildRadarNarratives(
+  positions: RadarPosition[],
+  events: ChangeEvent[],
+): RadarNarrative[] {
+  const positionByPair = new Map(
+    positions.map((position) => [`${position.etfId}:${position.stockId}`, position]),
+  );
+  const eventsByRound = new Map<string, ChangeEvent[]>();
+  for (const event of events) {
+    const position = positionByPair.get(`${event.etfId}:${event.stockId}`);
+    if (!position || event.tradeDate < position.entryDate) continue;
+    const key = `${position.etfId}:${position.stockId}:${position.entryDate}`;
+    const roundEvents = eventsByRound.get(key) ?? [];
+    roundEvents.push(event);
+    eventsByRound.set(key, roundEvents);
+  }
+
+  const grouped = new Map<string, RadarPosition[]>();
+  for (const position of positions) {
+    const current = grouped.get(position.stockId) ?? [];
+    current.push(position);
+    grouped.set(position.stockId, current);
+  }
+
+  return Array.from(grouped, ([stockId, stockPositions]) => {
+    const legs = stockPositions
+      .map((position): RadarEtfLeg => {
+        const roundEvents =
+          eventsByRound.get(`${position.etfId}:${position.stockId}:${position.entryDate}`) ?? [];
+        const followUps = roundEvents
+          .filter(
+            (event): event is ChangeEvent & { changeType: "ADD" | "TRIM" } =>
+              event.tradeDate > position.entryDate &&
+              (event.changeType === "ADD" || event.changeType === "TRIM"),
+          )
+          .map((event) => ({
+            tradeDate: event.tradeDate,
+            changeType: event.changeType,
+            sharesDelta: event.sharesDelta,
+            close: event.close,
+          }))
+          .sort((a, b) => {
+            const dateDiff = a.tradeDate.localeCompare(b.tradeDate);
+            return dateDiff !== 0 ? dateDiff : a.changeType.localeCompare(b.changeType);
+          });
+
+        return {
+          etfId: position.etfId,
+          etfName: position.etfName,
+          issuer: position.issuer,
+          entryDate: position.entryDate,
+          holdingTradingDays: position.holdingTradingDays,
+          excessReturnPct: position.excessReturnPct,
+          excessReturnNote: position.excessReturnNote,
+          followUps,
+        };
+      })
+      .sort((a, b) => {
+        const dateDiff = a.entryDate.localeCompare(b.entryDate);
+        return dateDiff !== 0 ? dateDiff : a.etfId.localeCompare(b.etfId);
+      });
+    const entryEvents = stockPositions.flatMap((position) => {
+      const eventsForRound =
+        eventsByRound.get(`${position.etfId}:${position.stockId}:${position.entryDate}`) ?? [];
+      const entry = eventsForRound.find(
+        (event) => event.changeType === "NEW" && event.tradeDate === position.entryDate,
+      );
+      return entry ? [entry] : [];
+    });
+    const addEvents = stockPositions.flatMap((position) =>
+      (
+        eventsByRound.get(`${position.etfId}:${position.stockId}:${position.entryDate}`) ?? []
+      ).filter(
+        (event) => event.changeType === "ADD" && event.tradeDate > position.entryDate,
+      ),
+    );
+    const etfCount = new Set(stockPositions.map((position) => position.etfId)).size;
+    const hasAdds = addEvents.length > 0;
+    const overseas = stockMarket(stockId) === "overseas";
+
+    return {
+      stockId,
+      stockName: stockPositions[0]?.stockName ?? stockId,
+      industry: stockPositions.find((position) => position.industry)?.industry ?? null,
+      etfCount,
+      issuerCount: new Set(stockPositions.map((position) => position.issuer)).size,
+      followUpCount: addEvents.length,
+      entryValueTwd:
+        overseas || entryEvents.length !== stockPositions.length
+          ? null
+          : eventValue(entryEvents),
+      addValueTwd: overseas ? null : eventValue(addEvents),
+      segment: `${etfCount >= 2 ? "multi" : "single"}_${hasAdds ? "add" : "new"}` as RadarSegment,
+      legs,
+    };
+  }).sort((a, b) => {
+    const etfDiff = b.etfCount - a.etfCount;
+    if (etfDiff !== 0) return etfDiff;
+    const followUpDiff = b.followUpCount - a.followUpCount;
+    if (followUpDiff !== 0) return followUpDiff;
+    const entryValueDiff = (b.entryValueTwd ?? 0) - (a.entryValueTwd ?? 0);
+    return entryValueDiff !== 0 ? entryValueDiff : a.stockId.localeCompare(b.stockId);
+  });
 }
 
 function formatFailureList(failures: ScrapeFailure[]): string {

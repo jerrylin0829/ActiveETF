@@ -2,6 +2,7 @@ import { createReadOnlySupabaseClient } from "@/lib/supabase";
 import {
   buildCollectiveMovements,
   buildOverviewDataGapWarnings,
+  buildRadarNarratives,
   buildRadarPositions,
   latestTradingWindow,
   rangeBounds,
@@ -29,7 +30,10 @@ type HoldingChangeRecord = {
 type StockInfoRecord = {
   stock_id: string;
   name: string;
+  industry: string | null;
 };
+
+type StockMetadata = { name: string; industry: string | null };
 
 type StockPriceRecord = {
   stock_id: string;
@@ -176,17 +180,19 @@ function buildRangeOptions(selectedDate: string | null, range: OverviewRange): R
 
 function mapChangeRecord(
   record: HoldingChangeRecord,
-  stockNames: Map<string, string>,
+  stockMetadata: Map<string, StockMetadata>,
   dailyCloses?: Map<string, number | null>,
 ): ChangeEvent {
   const etf = relatedEtf(record.etf);
+  const stock = stockMetadata.get(record.stock_id);
   const event: ChangeEvent = {
     etfId: record.etf_id,
     etfName: etf?.name ?? record.etf_id,
     issuer: etf?.issuer ?? "未提供",
     tradeDate: record.trade_date,
     stockId: record.stock_id,
-    stockName: stockNames.get(record.stock_id) ?? record.stock_id,
+    stockName: stock?.name ?? record.stock_id,
+    industry: stock?.industry ?? null,
     changeType: record.change_type,
     sharesDelta: toNumber(record.shares_delta),
     weightDeltaPct: toNumber(record.weight_delta_pct),
@@ -199,24 +205,39 @@ function mapChangeRecord(
     : event;
 }
 
-async function fetchStockNames(stockIds: string[]): Promise<{ data: Map<string, string>; error: string | null }> {
+async function fetchStockMetadata(
+  stockIds: string[],
+): Promise<{ data: Map<string, StockMetadata>; error: string | null }> {
   if (stockIds.length === 0) {
     return { data: new Map(), error: null };
   }
 
   const supabase = createReadOnlySupabaseClient();
-  const { data, error } = await supabase
-    .from("stock_info")
-    .select("stock_id, name")
-    .in("stock_id", stockIds);
-
-  if (error) {
-    return { data: new Map(), error: error.message };
+  const chunks = Array.from(
+    { length: Math.ceil(stockIds.length / stockQueryChunkSize) },
+    (_, index) =>
+      stockIds.slice(index * stockQueryChunkSize, (index + 1) * stockQueryChunkSize),
+  );
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      const { data, error } = await supabase
+        .from("stock_info")
+        .select("stock_id, name, industry")
+        .in("stock_id", chunk)
+        .order("stock_id", { ascending: true });
+      return { data: (data ?? []) as StockInfoRecord[], error: error?.message ?? null };
+    }),
+  );
+  const metadata = new Map<string, StockMetadata>();
+  for (const result of results) {
+    for (const record of result.data) {
+      metadata.set(record.stock_id, { name: record.name, industry: record.industry });
+    }
   }
 
   return {
-    data: new Map(((data ?? []) as StockInfoRecord[]).map((record) => [record.stock_id, record.name])),
-    error: null,
+    data: metadata,
+    error: results.map((result) => result.error).filter(Boolean).join("；") || null,
   };
 }
 
@@ -293,7 +314,8 @@ export async function fetchTodayOverview({
       rangeOptions: buildRangeOptions(selectedDate, range),
       changeEvents: [],
       collective: { increases: [], decreases: [] },
-      radarPositions: [],
+      radarNarratives: [],
+      radarError: null,
       warnings: [],
       error: dateResult.error,
     };
@@ -349,7 +371,7 @@ export async function fetchTodayOverview({
       supabase
         .from("holding_change")
         .select(changeSelect)
-        .in("change_type", ["NEW", "EXIT"])
+        .in("change_type", ["NEW", "EXIT", "ADD", "TRIM"])
         .gte("trade_date", radarStartDate)
         .lte("trade_date", selectedDate)
         .order("trade_date", { ascending: true })
@@ -385,22 +407,30 @@ export async function fetchTodayOverview({
     ...radarChangesResult.data,
   ];
   const stockIds = Array.from(new Set(allChangeRecords.map((record) => record.stock_id)));
-  const rangeStockIds = Array.from(
-    new Set(rangeChangesResult.data.map((record) => record.stock_id)),
+  const pricedStockIds = Array.from(
+    new Set(
+      [...rangeChangesResult.data, ...radarChangesResult.data].map(
+        (record) => record.stock_id,
+      ),
+    ),
   );
-  const [stockNamesResult, dailyClosesResult] = await Promise.all([
-    fetchStockNames(stockIds),
-    fetchDailyCloses(rangeStockIds, rangeStart, rangeEnd),
+  const closeStartDate = rangeStart < radarStartDate ? rangeStart : radarStartDate;
+  const closeEndDate = rangeEnd > selectedDate ? rangeEnd : selectedDate;
+  const [stockMetadataResult, dailyClosesResult] = await Promise.all([
+    fetchStockMetadata(stockIds),
+    fetchDailyCloses(pricedStockIds, closeStartDate, closeEndDate),
   ]);
-  const stockNames = stockNamesResult.data;
+  const stockMetadata = stockMetadataResult.data;
 
   const selectedEvents = sortChangeEvents(
-    selectedChangesResult.data.map((record) => mapChangeRecord(record, stockNames)),
+    selectedChangesResult.data.map((record) => mapChangeRecord(record, stockMetadata)),
   );
   const rangeEvents = rangeChangesResult.data.map((record) =>
-    mapChangeRecord(record, stockNames, dailyClosesResult.data),
+    mapChangeRecord(record, stockMetadata, dailyClosesResult.data),
   );
-  const radarEvents = radarChangesResult.data.map((record) => mapChangeRecord(record, stockNames));
+  const radarEvents = radarChangesResult.data.map((record) =>
+    mapChangeRecord(record, stockMetadata, dailyClosesResult.data),
+  );
   const etfNames = new Map(
     (((etfsResult.data ?? []) as EtfRecord[]).map((record) => [record.etf_id, record.name])),
   );
@@ -430,10 +460,23 @@ export async function fetchTodayOverview({
     radarChangesResult.error,
     scrapeFailuresResult.error,
     etfsResult.error?.message,
-    stockNamesResult.error,
+    stockMetadataResult.error,
     dailyClosesResult.error,
     openPositionsResult.error,
   ].filter(Boolean);
+
+  const radarErrors = [tradingDatesResult.error, radarChangesResult.error].filter(Boolean);
+  const radarError = radarErrors.length > 0
+    ? `新倉雷達資料讀取不完整：${radarErrors.join("；")}`
+    : null;
+  const radarPositions = radarError
+    ? []
+    : buildRadarPositions(
+        radarEvents,
+        radarTradingDates,
+        selectedDate,
+        openPositionRows,
+      );
 
   return {
     selectedDate,
@@ -442,12 +485,8 @@ export async function fetchTodayOverview({
     rangeOptions: buildRangeOptions(selectedDate, range),
     changeEvents: selectedEvents,
     collective: buildCollectiveMovements(rangeEvents),
-    radarPositions: buildRadarPositions(
-      radarEvents,
-      radarTradingDates,
-      selectedDate,
-      openPositionRows,
-    ),
+    radarNarratives: radarError ? [] : buildRadarNarratives(radarPositions, radarEvents),
+    radarError,
     warnings: buildOverviewDataGapWarnings(scrapeFailures),
     error: errors.length > 0 ? errors.join("；") : null,
   };

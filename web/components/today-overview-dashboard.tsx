@@ -1,23 +1,15 @@
 import Link from "next/link";
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Radar } from "lucide-react";
+import { AlertCircle, ArrowDownRight, ArrowUpRight } from "lucide-react";
 
 import { ChangeWall } from "@/components/change-wall";
 import { DataGapAlerts } from "@/components/data-gap-alerts";
 import { DateSelector } from "@/components/date-selector";
-import { formatSignedPct, formatStockLabel, formatYi } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
+import { RadarNarrative } from "@/components/radar-narrative";
+import { formatStockLabel, formatYi } from "@/lib/format";
 import { SiteNav } from "@/components/site-nav";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { type CollectiveMove, type TodayOverviewViewModel } from "@/lib/today-overview";
 import { cn } from "@/lib/utils";
-
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-md border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-      {children}
-    </div>
-  );
-}
 
 function CollectiveList({
   title,
@@ -113,91 +105,6 @@ function CollectiveMovements({ overview }: { overview: TodayOverviewViewModel })
   );
 }
 
-function NewPositionRadar({ overview }: { overview: TodayOverviewViewModel }) {
-  return (
-    <section aria-label="新倉追蹤雷達" className="min-w-0 space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">新倉追蹤雷達</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            NEW 後尚未 EXIT、且未滿 20 個交易日的部位。
-          </p>
-        </div>
-        <Radar className="size-5 text-primary" aria-hidden="true" />
-      </div>
-
-      {overview.radarPositions.length === 0 ? (
-        <EmptyState>目前沒有符合雷達條件的新倉。</EmptyState>
-      ) : (
-        <div className="overflow-x-auto rounded-md border border-border bg-card">
-          <table className="min-w-[760px] w-full text-sm">
-            <thead className="border-b border-border bg-muted/50">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">ETF</th>
-                <th className="px-3 py-2 text-left font-medium">股票</th>
-                <th className="px-3 py-2 text-left font-medium">進場日</th>
-                <th className="px-3 py-2 text-right font-medium">持有交易日</th>
-                <th className="px-3 py-2 text-left font-medium">共同訊號</th>
-                <th className="px-3 py-2 text-left font-medium">超額報酬</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.radarPositions.map((position) => (
-                <tr key={`${position.etfId}-${position.stockId}`} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2 align-top">
-                    <div className="font-mono font-semibold tabular-nums">{position.etfId}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{position.etfName}</div>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    <Link
-                      href={`/stock/${encodeURIComponent(position.stockId)}`}
-                      className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <div className="font-mono font-semibold tabular-nums hover:text-primary">
-                        {formatStockLabel(position.stockId, position.stockName)}
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 align-top font-mono tabular-nums">{position.entryDate}</td>
-                  <td className="px-3 py-2 text-right align-top font-mono tabular-nums">
-                    {position.holdingTradingDays}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {position.sharedSignal ? (
-                      <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-800">
-                        {position.sharedSignal}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 align-top font-mono tabular-nums">
-                    {position.excessReturnNote ? (
-                      <span className="text-muted-foreground">{position.excessReturnNote}</span>
-                    ) : (
-                      <span
-                        className={
-                          Math.abs(position.excessReturnPct ?? 0) >= 10
-                            ? position.excessReturnPct! >= 0
-                              ? "font-semibold text-[var(--market-up)]"
-                              : "font-semibold text-[var(--market-down)]"
-                            : undefined
-                        }
-                      >
-                        {formatSignedPct(position.excessReturnPct)}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
 export function TodayOverviewDashboard({ overview }: { overview: TodayOverviewViewModel }) {
   return (
     <main className="min-h-screen bg-background">
@@ -243,7 +150,10 @@ export function TodayOverviewDashboard({ overview }: { overview: TodayOverviewVi
       <div className="mx-auto grid w-full max-w-7xl grid-cols-[minmax(0,1fr)] gap-8 px-4 py-6 sm:px-6 lg:px-8">
         <ChangeWall events={overview.changeEvents} />
         <CollectiveMovements overview={overview} />
-        <NewPositionRadar overview={overview} />
+        <RadarNarrative
+          narratives={overview.radarNarratives}
+          error={overview.radarError}
+        />
       </div>
     </main>
   );
