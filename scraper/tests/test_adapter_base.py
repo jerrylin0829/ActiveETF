@@ -48,6 +48,15 @@ def test_每支_adapter_的位移與_2026_07_31_實測相符():
     }
 
 
+def test_統一的全球型_00988A_比台股型多一個交易日():
+    """2026-07-31 實測：00988A 以 +1 取得的一律是目標日的前一交易日，需 +2。"""
+    module = base.load("uni")
+
+    assert base.history_request_offset(module, "00988A") == 2
+    assert base.history_request_offset(module, "00981A") == 1
+    assert base.history_request_offset(module, "00403A") == 1
+
+
 # 各家日期字串格式不同，共用解析器；台北時區是必要的（見 uni 的 /Date(ms)/）
 
 @pytest.mark.parametrize(
@@ -67,3 +76,45 @@ def test_parse_upstream_date_accepts_every_observed_format(raw, expected):
 @pytest.mark.parametrize("raw", ["", None, "n/a", "/Date(abc)/"])
 def test_parse_upstream_date_returns_none_rather_than_guessing(raw):
     assert base.parse_upstream_date(raw) is None
+
+
+# 同一份 payload 內多列都帶日期時，必須一致才採信（混日期代表上游狀態不明）
+
+def test_unique_upstream_date_returns_the_agreed_date():
+    assert base.unique_upstream_date(
+        ["2026-07-27", "2026/07/27", "2026-07-27T00:00:00"]
+    ) == dt.date(2026, 7, 27)
+
+
+def test_unique_upstream_date_returns_none_when_rows_disagree():
+    assert base.unique_upstream_date(["2026-07-27", "2026-07-28"]) is None
+
+
+def test_unique_upstream_date_ignores_unparsable_entries():
+    assert base.unique_upstream_date([None, "", "2026-07-27"]) == dt.date(2026, 7, 27)
+
+
+def test_unique_upstream_date_returns_none_when_nothing_parses():
+    assert base.unique_upstream_date([None, "n/a"]) is None
+
+
+# 同一支 adapter 底下不同 ETF 的發布時程可能不同（實測：統一的全球型 00988A
+# 與台股型 00981A 差一個交易日），故位移必須可以逐檔覆寫。
+
+def test_history_request_offset_falls_back_to_the_module_default():
+    module = types.SimpleNamespace(HISTORY_REQUEST_OFFSET=1)
+    assert base.history_request_offset(module, "00981A") == 1
+
+
+def test_history_request_offset_prefers_the_per_etf_override():
+    module = types.SimpleNamespace(
+        HISTORY_REQUEST_OFFSET=1,
+        HISTORY_REQUEST_OFFSETS={"00988A": 2},
+    )
+    assert base.history_request_offset(module, "00988A") == 2
+    assert base.history_request_offset(module, "00981A") == 1
+
+
+def test_history_request_offset_without_etf_id_uses_the_default():
+    module = types.SimpleNamespace(HISTORY_REQUEST_OFFSET=-1)
+    assert base.history_request_offset(module) == -1

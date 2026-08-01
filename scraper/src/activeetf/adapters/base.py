@@ -4,6 +4,7 @@
 import datetime as dt
 import importlib
 import re
+from collections.abc import Iterable
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
@@ -43,9 +44,22 @@ def supports_history(module: object) -> bool:
     return callable(getattr(module, "fetch_at", None))
 
 
-def history_request_offset(module: object) -> int:
-    """目標交易日 → 請求日的位移，單位為**交易日**（預設 0 = 請求日即資料日）。"""
+def history_request_offset(module: object, etf_id: str | None = None) -> int:
+    """目標交易日 → 請求日的位移，單位為**交易日**（預設 0 = 請求日即資料日）。
+
+    同一支 adapter 底下不同 ETF 的發布時程可能不同（實測：統一的全球型 00988A
+    比台股型 00981A 多一個交易日），故容許以 `HISTORY_REQUEST_OFFSETS` 逐檔覆寫。
+    """
+    per_etf = getattr(module, "HISTORY_REQUEST_OFFSETS", {})
+    if etf_id is not None and etf_id in per_etf:
+        return per_etf[etf_id]
     return getattr(module, "HISTORY_REQUEST_OFFSET", 0)
+
+
+def unique_upstream_date(values: Iterable[object]) -> dt.date | None:
+    """多列都帶資料日時要求一致；不一致代表上游狀態不明，回 None 不猜。"""
+    parsed = {date for date in map(parse_upstream_date, values) if date}
+    return parsed.pop() if len(parsed) == 1 else None
 
 
 def parse_upstream_date(raw: object) -> dt.date | None:

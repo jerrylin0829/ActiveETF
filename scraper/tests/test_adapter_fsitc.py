@@ -85,3 +85,12 @@ def test_source_date_reads_row_sdate():
 
 def test_source_date_none_when_upstream_returns_no_rows():
     assert fsitc.source_date({"d": "[]"}) is None
+
+
+def test_source_date_none_when_rows_disagree():
+    payload = {"d": json.dumps([
+        {"group": "1", "A": "2330", "C": "1.0", "D": "1", "sdate": "2026-07-27"},
+        {"group": "1", "A": "2317", "C": "1.0", "D": "1", "sdate": "2026-07-28"},
+    ])}
+
+    assert fsitc.source_date(payload) is None

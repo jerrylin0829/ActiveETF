@@ -40,11 +40,9 @@ def parse(payload: dict) -> list[Holding]:
 
 def source_date(payload: dict) -> dt.date | None:
     """上游自報的資料日 = 各列的 `sdate`（原本整個被丟棄）。"""
-    for row in json.loads(payload.get("d") or "[]"):
-        parsed = base.parse_upstream_date(row.get("sdate"))
-        if parsed:
-            return parsed
-    return None
+    return base.unique_upstream_date(
+        row.get("sdate") for row in json.loads(payload.get("d") or "[]")
+    )
 
 
 def _fund_id(url: str) -> str:

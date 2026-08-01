@@ -14,6 +14,8 @@ _PCF_PAGE = "https://www.ezmoney.com.tw/ETF/Transaction/PCF"
 _PCF_API = "https://www.ezmoney.com.tw/ETF/Transaction/GetPCF"
 # 請求 D 拿到的是 D 的前一交易日資料，故目標交易日 T 要請求 T 的次一交易日
 HISTORY_REQUEST_OFFSET = 1
+# 全球型的 00988A 又多一個交易日的時差（2026-07-31 實測，台股型的兩檔為 +1）
+HISTORY_REQUEST_OFFSETS = {"00988A": 2}
 _FUND_CODES = {
     "00403A": "63YTW",
     "00981A": "49YTW",
@@ -54,11 +56,9 @@ def source_date(payload: dict) -> dt.date | None:
     `PostDate` 是該份 PCF「適用的交易日」，比資料日晚一個交易日——用 PostDate
     核對會剛好把錯位的資料判成正確。
     """
-    for row in payload.get("pcf") or []:
-        parsed = base.parse_upstream_date(row.get("TranDate"))
-        if parsed:
-            return parsed
-    return None
+    return base.unique_upstream_date(
+        row.get("TranDate") for row in payload.get("pcf") or []
+    )
 
 
 def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> dict:

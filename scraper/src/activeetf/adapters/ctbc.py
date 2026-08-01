@@ -57,11 +57,9 @@ def source_date(payload: dict) -> dt.date | None:
     body = payload
     if "Detail" not in body and isinstance(body.get("Data"), dict):
         body = body["Data"]
-    for row in body.get("Data") or []:
-        parsed = base.parse_upstream_date(row.get("公告日"))
-        if parsed:
-            return parsed
-    return None
+    return base.unique_upstream_date(
+        row.get("公告日") for row in body.get("Data") or []
+    )
 
 
 def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> dict:

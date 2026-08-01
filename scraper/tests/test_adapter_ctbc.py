@@ -94,3 +94,12 @@ def test_source_date_reads_announcement_date():
 
 def test_source_date_none_when_upstream_omits_it():
     assert ctbc.source_date({"Data": []}) is None
+
+
+def test_source_date_none_when_rows_disagree():
+    payload = {"Detail": [], "Data": [
+        {"公告日": "2026/07/27"},
+        {"公告日": "2026/07/28"},
+    ]}
+
+    assert ctbc.source_date(payload) is None

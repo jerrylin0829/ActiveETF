@@ -116,3 +116,12 @@ def test_source_date_parses_aspnet_epoch_in_taipei_time():
 
 def test_source_date_none_when_upstream_omits_it():
     assert uni.source_date({"pcf": []}) is None
+
+
+def test_source_date_none_when_pcf_rows_disagree():
+    payload = {"pcf": [
+        {"TranDate": "2026-07-27T00:00:00"},
+        {"TranDate": "2026-07-28T00:00:00"},
+    ]}
+
+    assert uni.source_date(payload) is None
