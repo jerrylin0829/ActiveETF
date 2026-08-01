@@ -7,6 +7,7 @@ Planner：Claude Code ｜ 日期：2026-07-25 ｜ 目標分支：`codex/historic
 - ✅ **12 檔**從各自上市日起逐交易日嘗試回補；僅寫入通過三道驗證的日期，最早可用日不保證等於上市日
 - ✅ Adapter 介面用**可選能力** `fetch_at(entry, date)`，**不改** `fetch(entry)`；13 家不支援者不動
 - ⚠️ **2026-07-31 追加（實測後）**：六支的「請求日」不全等於「資料日」——國泰、中信為 0 位移，統一／第一金／安聯為前一交易日，元大為次一交易日。`fetch_at` 改回 `(holdings, source_date)`，請求日以**交易日**位移換算，寫入前核對資料日等於目標 `trade_date`。設計見 spec §3.1，**此 gate 不可省略**
+- ⚠️ **2026-07-31 追加二（Evaluator 複審後）**：回補與事件重建拆兩階段（spec §4.5）；既有快照缺觀察部位改以 bounded append-only 修復（spec §9.1，`scripts/repair_observations.py`），**須在重建事件之前執行**
 - ✅ `etf_metrics` **只重算最新一日**（歷史指標列無人讀取；可逆，日後要做趨勢圖再補）
 - ✅ 歷史起始日**不新增 DB 欄位**，以 `dashboard_etf_history_range` view 即時衍生
 - ✅ 排行榜勝率**無條件**加註起算日，不設「差異夠大才標」門檻

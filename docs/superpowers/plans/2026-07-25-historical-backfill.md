@@ -6,6 +6,8 @@
 
 > **2026-07-26 Evaluator 修訂（優先於下方原始 Task 8 程式片段）**：00990A 2025-12-15 的 50.80% 股票曝險維持 validation failure，不另訂 global ETF 例外；腳本統計分列已有快照、validation failure、fetch failure。`holding_change` 的 snapshot read 與 replace 改為同 transaction，依序鎖 `holdings_snapshot`、`holding_change`，並補真 DB rollback test。Dashboard 的有限 `scrape_log` 查詢改依 `trade_date DESC, run_at DESC, id DESC`，避免歷史回補紀錄排擠近期告警。
 
+> **2026-07-31 修訂二（Evaluator 複審後）**：回補與 `holding_change` 重建**拆成兩階段**——回補只寫快照，重建須另外執行 `--rebuild-changes`；出現任何 `SourceDateMismatch` 即非零 exit 且不重建（spec §4.5）。另新增 `scripts/repair_observations.py`，以 bounded append-only 方式補回 2026-07-13～07-23 既有快照缺少的觀察部位（spec §9.1）——**必須在重建事件之前執行**。
+
 > **2026-07-31 修訂（優先於下方所有 `fetch_at` 程式片段）**：實測發現六支的請求日不全等於資料日（spec §3.1）。`fetch_at` 簽章改為回傳 `(holdings, source_date)`；各 adapter 宣告 `HISTORY_REQUEST_OFFSET`（單位**交易日**）與 `source_date()` 取值欄位；回補腳本以 `request_date_for()` 換算請求日，並在寫入前呼叫 `validate_source_date()`。下方 Task 2–5 的片段只回 `list[Holding]`，已過時。
 
 > **Canary 操作順序**：先執行 `uv run python scripts/backfill_history.py --etf-id 00990A --date 2025-12-15`。單日模式只抓指定 ETF／日期，且不重建全歷史 `holding_change`；確認 50.80% 被記為 validation failure、沒有 snapshot 後，才進入下方完整回補指令。
