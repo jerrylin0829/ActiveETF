@@ -315,6 +315,7 @@ export async function fetchTodayOverview({
       changeEvents: [],
       collective: { increases: [], decreases: [] },
       radarNarratives: [],
+      radarError: null,
       warnings: [],
       error: dateResult.error,
     };
@@ -464,12 +465,17 @@ export async function fetchTodayOverview({
     openPositionsResult.error,
   ].filter(Boolean);
 
-  const radarPositions = buildRadarPositions(
-    radarEvents,
-    radarTradingDates,
-    selectedDate,
-    openPositionRows,
-  );
+  const radarError = radarChangesResult.error
+    ? `新倉雷達事件讀取不完整：${radarChangesResult.error}`
+    : null;
+  const radarPositions = radarError
+    ? []
+    : buildRadarPositions(
+        radarEvents,
+        radarTradingDates,
+        selectedDate,
+        openPositionRows,
+      );
 
   return {
     selectedDate,
@@ -478,7 +484,8 @@ export async function fetchTodayOverview({
     rangeOptions: buildRangeOptions(selectedDate, range),
     changeEvents: selectedEvents,
     collective: buildCollectiveMovements(rangeEvents),
-    radarNarratives: buildRadarNarratives(radarPositions, radarEvents),
+    radarNarratives: radarError ? [] : buildRadarNarratives(radarPositions, radarEvents),
+    radarError,
     warnings: buildOverviewDataGapWarnings(scrapeFailures),
     error: errors.length > 0 ? errors.join("；") : null,
   };

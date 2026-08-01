@@ -103,6 +103,7 @@ const overview: TodayOverviewViewModel = {
       }],
     },
   ],
+  radarError: null,
   warnings: [
     {
       title: "資料缺口",

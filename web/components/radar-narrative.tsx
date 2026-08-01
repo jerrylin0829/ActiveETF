@@ -87,7 +87,13 @@ function EtfLeg({ leg }: { leg: RadarEtfLeg }) {
   );
 }
 
-export function RadarNarrative({ narratives }: { narratives: RadarNarrativeModel[] }) {
+export function RadarNarrative({
+  narratives,
+  error = null,
+}: {
+  narratives: RadarNarrativeModel[];
+  error?: string | null;
+}) {
   const [segment, setSegment] = useState<RadarSegment>("multi_add");
   const [expanded, setExpanded] = useState(false);
   const tabRefs = useRef<Partial<Record<RadarSegment, HTMLButtonElement | null>>>({});
@@ -141,114 +147,128 @@ export function RadarNarrative({ narratives }: { narratives: RadarNarrativeModel
         <Radar className="mt-1 size-5 shrink-0 text-primary" aria-hidden="true" />
       </div>
 
-      <div
-        role="tablist"
-        aria-label="雷達分類"
-        className="flex max-w-full gap-2 overflow-x-auto pb-1"
-      >
-        {segments.map((option) => (
-          <button
-            key={option.value}
-            ref={(element) => {
-              tabRefs.current[option.value] = element;
-            }}
-            type="button"
-            role="tab"
-            id={`radar-tab-${option.value}`}
-            aria-controls="radar-narrative-panel"
-            aria-selected={segment === option.value}
-            tabIndex={segment === option.value ? 0 : -1}
-            onClick={() => selectSegment(option.value)}
-            onKeyDown={(event) => handleTabKeyDown(event, option.value)}
-            className={cn(
-              "shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-              segment === option.value
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950"
+        >
+          <p className="font-semibold">雷達資料讀取不完整</p>
+          <p className="mt-1 text-sm">本次事件未完整載入；為避免誤判，暫不顯示分類與金額。</p>
+        </div>
+      ) : (
+        <>
+          <div
+            role="tablist"
+            aria-label="雷達分類"
+            className="flex max-w-full gap-2 overflow-x-auto pb-1"
           >
-            {option.label} {counts[option.value]}
-          </button>
-        ))}
-      </div>
-
-      <div
-        id="radar-narrative-panel"
-        role="tabpanel"
-        aria-labelledby={`radar-tab-${segment}`}
-      >
-        {filtered.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            此分類目前沒有符合雷達條件的新倉。
+            {segments.map((option) => (
+              <button
+                key={option.value}
+                ref={(element) => {
+                  tabRefs.current[option.value] = element;
+                }}
+                type="button"
+                role="tab"
+                id={`radar-tab-${option.value}`}
+                aria-controls="radar-narrative-panel"
+                aria-selected={segment === option.value}
+                tabIndex={segment === option.value ? 0 : -1}
+                onClick={() => selectSegment(option.value)}
+                onKeyDown={(event) => handleTabKeyDown(event, option.value)}
+                className={cn(
+                  "shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                  segment === option.value
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                {option.label} {counts[option.value]}
+              </button>
+            ))}
           </div>
-        ) : (
-          <div className="space-y-3">
-          {visible.map((narrative) => (
-            <article
-              key={narrative.stockId}
-              data-testid={`radar-narrative-${narrative.stockId}`}
-              className="min-w-0 overflow-hidden rounded-md border border-border bg-card"
-            >
-              <div className="border-b border-border bg-muted/25 px-4 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <Link
-                      href={`/stock/${encodeURIComponent(narrative.stockId)}`}
-                      className="rounded-sm font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {formatStockLabel(narrative.stockId, narrative.stockName)}
-                    </Link>
-                    <Badge variant="outline" className="font-normal text-muted-foreground">
-                      {narrative.industry ?? "未分類"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm font-medium">
-                    {narrative.etfCount} 檔 ETF / {narrative.issuerCount} 家投信建倉，後續加碼{" "}
-                    {narrative.followUpCount} 筆
-                  </p>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 font-mono text-xs text-muted-foreground tabular-nums">
-                  <span>估算新進 {formatYi(narrative.entryValueTwd)}</span>
-                  <span>估算加碼 {formatYi(narrative.addValueTwd)}</span>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-[minmax(0,1fr)_8rem] border-b border-border bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground lg:grid-cols-[minmax(12rem,0.8fr)_minmax(18rem,1.5fr)_7rem_8rem]">
-                <span>建倉 ETF</span>
-                <span className="hidden lg:block">建倉脈絡</span>
-                <span className="hidden text-right lg:block">持有交易日</span>
-                <span className="text-right">建倉以來超額</span>
+          <div
+            id="radar-narrative-panel"
+            role="tabpanel"
+            aria-labelledby={`radar-tab-${segment}`}
+          >
+            {filtered.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+                此分類目前沒有符合雷達條件的新倉。
               </div>
-              <div className="divide-y divide-border/70">
-                {narrative.legs.map((leg) => (
-                  <EtfLeg key={`${leg.etfId}-${leg.entryDate}`} leg={leg} />
+            ) : (
+              <div id="radar-narrative-list" className="space-y-3">
+                {visible.map((narrative) => (
+                  <article
+                    key={narrative.stockId}
+                    data-testid={`radar-narrative-${narrative.stockId}`}
+                    className="min-w-0 overflow-hidden rounded-md border border-border bg-card"
+                  >
+                    <div className="border-b border-border bg-muted/25 px-4 py-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <Link
+                            href={`/stock/${encodeURIComponent(narrative.stockId)}`}
+                            className="rounded-sm font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {formatStockLabel(narrative.stockId, narrative.stockName)}
+                          </Link>
+                          <Badge variant="outline" className="font-normal text-muted-foreground">
+                            {narrative.industry ?? "未分類"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm font-medium">
+                          {narrative.etfCount} 檔 ETF / {narrative.issuerCount} 家投信建倉，後續加碼{" "}
+                          {narrative.followUpCount} 筆
+                        </p>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 font-mono text-xs text-muted-foreground tabular-nums">
+                        <span>估算新進 {formatYi(narrative.entryValueTwd)}</span>
+                        <span>估算加碼 {formatYi(narrative.addValueTwd)}</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-[minmax(0,1fr)_8rem] border-b border-border bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground lg:grid-cols-[minmax(12rem,0.8fr)_minmax(18rem,1.5fr)_7rem_8rem]">
+                      <span>建倉 ETF</span>
+                      <span className="hidden lg:block">建倉脈絡</span>
+                      <span className="hidden text-right lg:block">持有交易日</span>
+                      <span className="text-right">建倉以來超額</span>
+                    </div>
+                    <div className="divide-y divide-border/70">
+                      {narrative.legs.map((leg) => (
+                        <EtfLeg key={`${leg.etfId}-${leg.entryDate}`} leg={leg} />
+                      ))}
+                    </div>
+                  </article>
                 ))}
-              </div>
-            </article>
-          ))}
 
-          {filtered.length > visibleLimit ? (
-            <button
-              type="button"
-              onClick={() => setExpanded((current) => !current)}
-              className="flex w-full items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="size-4" aria-hidden="true" />
-                  收合
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="size-4" aria-hidden="true" />
-                  查看更多（{hiddenCount}）
-                </>
-              )}
-            </button>
-          ) : null}
+                {filtered.length > visibleLimit ? (
+                  <button
+                    type="button"
+                    aria-controls="radar-narrative-list"
+                    aria-expanded={expanded}
+                    onClick={() => setExpanded((current) => !current)}
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    {expanded ? (
+                      <>
+                        <ChevronUp className="size-4" aria-hidden="true" />
+                        收合
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="size-4" aria-hidden="true" />
+                        查看更多（{hiddenCount}）
+                      </>
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </section>
   );
 }

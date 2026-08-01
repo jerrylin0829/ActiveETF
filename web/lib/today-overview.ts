@@ -103,6 +103,7 @@ export type TodayOverviewViewModel = {
   changeEvents: ChangeEvent[];
   collective: CollectiveMovements;
   radarNarratives: RadarNarrative[];
+  radarError: string | null;
   warnings: DataGapWarning[];
   error: string | null;
 };

@@ -20,7 +20,12 @@ type QueryExecution = {
   range: [number, number] | null;
 };
 
-class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
+type QueryFailure = (execution: QueryExecution) => string | null;
+
+class QueryBuilder implements PromiseLike<{
+  data: DataRecord[] | null;
+  error: { message: string } | null;
+}> {
   private readonly filters: QueryExecution["filters"] = [];
   private readonly orders: QueryExecution["orders"] = [];
   private selectedRange: [number, number] | null = null;
@@ -30,6 +35,7 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
     private readonly table: string,
     private readonly records: DataRecord[],
     private readonly executions: QueryExecution[],
+    private readonly failQuery: QueryFailure,
   ) {}
 
   select() {
@@ -76,20 +82,26 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
     return this;
   }
 
-  then<TResult1 = { data: DataRecord[]; error: null }, TResult2 = never>(
-    onfulfilled?: ((value: { data: DataRecord[]; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+  then<TResult1 = { data: DataRecord[] | null; error: { message: string } | null }, TResult2 = never>(
+    onfulfilled?: ((value: { data: DataRecord[] | null; error: { message: string } | null }) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
     return Promise.resolve(this.execute()).then(onfulfilled, onrejected);
   }
 
   private execute() {
-    this.executions.push({
+    const execution: QueryExecution = {
       table: this.table,
       filters: [...this.filters],
       orders: [...this.orders],
       range: this.selectedRange,
-    });
+    };
+    this.executions.push(execution);
+
+    const failure = this.failQuery(execution);
+    if (failure) {
+      return { data: null, error: { message: failure } };
+    }
 
     let rows = this.records.filter((record) =>
       this.filters.every((filter) => {
@@ -123,7 +135,10 @@ class QueryBuilder implements PromiseLike<{ data: DataRecord[]; error: null }> {
   }
 }
 
-function installSupabaseDouble(overrides: Partial<Record<string, DataRecord[]>> = {}) {
+function installSupabaseDouble(
+  overrides: Partial<Record<string, DataRecord[]>> = {},
+  failQuery: QueryFailure = () => null,
+) {
   const executions: QueryExecution[] = [];
   const datasets: Record<string, DataRecord[]> = {
     dashboard_holding_change_dates: [{ trade_date: "2026-07-14" }],
@@ -138,11 +153,53 @@ function installSupabaseDouble(overrides: Partial<Record<string, DataRecord[]>> 
   };
   const client = {
     from(table: string) {
-      return new QueryBuilder(table, datasets[table] ?? [], executions);
+      return new QueryBuilder(table, datasets[table] ?? [], executions, failQuery);
     },
   };
   createClientMock.mockReturnValue(client);
   return executions;
+}
+
+function radarPagedChanges(): DataRecord[] {
+  return [
+    {
+      etf_id: "00001A",
+      trade_date: "2026-07-10",
+      stock_id: "9999",
+      change_type: "NEW",
+      shares_delta: 10,
+      weight_delta_pct: 1,
+      etf: { name: "測試主動 ETF", issuer: "測試投信" },
+    },
+    ...Array.from({ length: 999 }, (_, index) => ({
+      etf_id: `${String(index + 2).padStart(5, "0")}A`,
+      trade_date: "2026-07-10",
+      stock_id: String(index).padStart(4, "0"),
+      change_type: "NEW",
+      shares_delta: 1,
+      weight_delta_pct: 0.05,
+      etf: { name: "測試主動 ETF", issuer: "測試投信" },
+    })),
+    {
+      etf_id: "00001A",
+      trade_date: "2026-07-11",
+      stock_id: "9999",
+      change_type: "ADD",
+      shares_delta: 2,
+      weight_delta_pct: 0.2,
+      etf: { name: "測試主動 ETF", issuer: "測試投信" },
+    },
+  ];
+}
+
+function isRadarSecondPage(execution: QueryExecution): boolean {
+  return (
+    execution.table === "holding_change" &&
+    execution.range?.[0] === 1000 &&
+    execution.filters.some(
+      (filter) => filter.kind === "in" && filter.column === "change_type",
+    )
+  );
 }
 
 describe("fetchTodayOverview", () => {
@@ -205,24 +262,70 @@ describe("fetchTodayOverview", () => {
     expect(result.warnings[0].description).toContain("00987A 台新優勢成長（HTTP 503）");
   });
 
-  it("keeps all holding-change pages under a complete primary-key order", async () => {
-    const changes = Array.from({ length: 1001 }, (_, index) => ({
-      etf_id: "00987A",
-      trade_date: "2026-07-14",
-      stock_id: String(index).padStart(4, "0"),
-      change_type: "ADD",
-      shares_delta: 1,
-      weight_delta_pct: 0.05,
-      etf: { name: "台新優勢成長", issuer: "台新" },
-    }));
-    const executions = installSupabaseDouble({ holding_change: changes });
+  it("includes the radar query's second page in narratives under a complete primary-key order", async () => {
+    const executions = installSupabaseDouble({
+      dashboard_holding_snapshot_dates: [
+        { trade_date: "2026-07-10" },
+        { trade_date: "2026-07-11" },
+        { trade_date: "2026-07-14" },
+      ],
+      holding_change: radarPagedChanges(),
+      stock_info: [{ stock_id: "9999", name: "分頁測試股", industry: "測試業" }],
+      stock_price: [
+        { stock_id: "9999", trade_date: "2026-07-10", close: 100 },
+        { stock_id: "9999", trade_date: "2026-07-11", close: 110 },
+      ],
+    });
 
     const result = await fetchTodayOverview({ date: "2026-07-14", range: "day" });
 
-    expect(result.changeEvents).toHaveLength(1001);
-    const changeQueries = executions.filter((execution) => execution.table === "holding_change");
-    expect(changeQueries.some((query) => query.range?.[0] === 1000)).toBe(true);
-    expect(changeQueries.every((query) => query.orders.map((order) => order.column).join(",") === "trade_date,etf_id,stock_id")).toBe(true);
+    expect(result.radarNarratives).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stockId: "9999",
+          followUpCount: 1,
+          addValueTwd: 220,
+          segment: "single_add",
+        }),
+      ]),
+    );
+    const radarQueries = executions.filter(
+      (execution) =>
+        execution.table === "holding_change" &&
+        execution.filters.some(
+          (filter) => filter.kind === "in" && filter.column === "change_type",
+        ),
+    );
+    expect(radarQueries.some((query) => query.range?.[0] === 1000)).toBe(true);
+    expect(
+      radarQueries.every(
+        (query) =>
+          query.orders.map((order) => order.column).join(",") ===
+          "trade_date,etf_id,stock_id",
+      ),
+    ).toBe(true);
+  });
+
+  it("hides radar narratives when the radar query's second page fails", async () => {
+    const executions = installSupabaseDouble(
+      {
+        dashboard_holding_snapshot_dates: [
+          { trade_date: "2026-07-10" },
+          { trade_date: "2026-07-11" },
+          { trade_date: "2026-07-14" },
+        ],
+        holding_change: radarPagedChanges(),
+      },
+      (execution) => (isRadarSecondPage(execution) ? "radar page 2 failed" : null),
+    );
+
+    const result = await fetchTodayOverview({ date: "2026-07-14", range: "day" });
+
+    expect(
+      executions.some(isRadarSecondPage),
+    ).toBe(true);
+    expect(result.radarNarratives).toEqual([]);
+    expect(result.radarError).toContain("radar page 2 failed");
   });
 
   it.each([

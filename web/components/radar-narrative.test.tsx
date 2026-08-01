@@ -173,8 +173,29 @@ describe("RadarNarrative", () => {
     expect(screen.getAllByTestId(/^radar-narrative-/)).toHaveLength(5);
     expect(screen.queryByTestId("radar-narrative-3005")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "查看更多（1）" }));
+    const toggle = screen.getByRole("button", { name: "查看更多（1）" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveAttribute("aria-controls", "radar-narrative-list");
+
+    await user.click(toggle);
     expect(screen.getAllByTestId(/^radar-narrative-/)).toHaveLength(6);
     expect(screen.getByTestId("radar-narrative-3005")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收合" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("shows an explicit incomplete state instead of empty radar results", () => {
+    render(
+      <RadarNarrative
+        narratives={[]}
+        error="新倉雷達事件讀取不完整：radar page 2 failed"
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("雷達資料讀取不完整");
+    expect(screen.getByRole("alert")).toHaveTextContent("暫不顯示分類與金額");
+    expect(screen.queryByText("此分類目前沒有符合雷達條件的新倉。")).not.toBeInTheDocument();
   });
 });

@@ -150,7 +150,10 @@ export function TodayOverviewDashboard({ overview }: { overview: TodayOverviewVi
       <div className="mx-auto grid w-full max-w-7xl grid-cols-[minmax(0,1fr)] gap-8 px-4 py-6 sm:px-6 lg:px-8">
         <ChangeWall events={overview.changeEvents} />
         <CollectiveMovements overview={overview} />
-        <RadarNarrative narratives={overview.radarNarratives} />
+        <RadarNarrative
+          narratives={overview.radarNarratives}
+          error={overview.radarError}
+        />
       </div>
     </main>
   );
