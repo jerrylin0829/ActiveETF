@@ -1,4 +1,6 @@
 import datetime as dt
+
+import pytest
 from types import SimpleNamespace
 
 from activeetf.models import Holding
@@ -71,19 +73,20 @@ def test_main_builds_targets_from_cached_0050_trading_dates(monkeypatch):
         "rebuild_holding_changes",
         lambda etf_ids: captured.setdefault("rebuilt", etf_ids),
     )
+    monkeypatch.setattr(backfill_history.db, "known_stock_ids", lambda: set())
 
     backfill_history.main([])
 
-    assert captured["calendar"] == (
-        listing_date,
-        today,
-    )
+    # 日曆兩端各留一段，位移換算才有相鄰交易日可用
+    start, end = captured["calendar"]
+    assert start < listing_date and end > today
     assert captured["targets"] == (
         trading_dates,
         {"00981A": listing_date},
         set(),
     )
-    assert captured["rebuilt"] == ["00981A"]
+    # 兩階段後預設不重建（需明確 --rebuild-changes）
+    assert "rebuilt" not in captured
 
 
 def test_rebuild_holding_changes_replays_all_snapshot_dates(monkeypatch):
@@ -282,10 +285,12 @@ def test_canary_mode_limits_one_etf_and_date_without_rebuilding_history(
     )
     fetched = []
     rebuilt = []
+    writes = []
+    logs = []
 
     def fetch_at(_entry, date):
         fetched.append(date)
-        return [Holding("NVDA US", 1000, 80.0)]
+        return [Holding("NVDA US", 1000, 80.0)], date
 
     monkeypatch.setattr(
         backfill_history,
@@ -313,8 +318,12 @@ def test_canary_mode_limits_one_etf_and_date_without_rebuilding_history(
         "latest_snapshot_date",
         lambda *_args, **_kwargs: None,
     )
-    monkeypatch.setattr(backfill_history.db, "write_snapshot", lambda *_args: None)
-    monkeypatch.setattr(backfill_history.db, "log_scrape", lambda *_args: None)
+    monkeypatch.setattr(
+        backfill_history.db, "write_snapshot", lambda *args: writes.append(args)
+    )
+    monkeypatch.setattr(
+        backfill_history.db, "log_scrape", lambda *args: logs.append(args)
+    )
     monkeypatch.setattr(backfill_history, "rebuild_holding_changes", rebuilt.append)
     monkeypatch.setattr(backfill_history.time, "sleep", lambda _seconds: None)
 
@@ -322,7 +331,12 @@ def test_canary_mode_limits_one_etf_and_date_without_rebuilding_history(
 
     assert fetched == [trade_date]
     assert rebuilt == []
-    assert "Canary：00990A 2025-12-15" in capsys.readouterr().out
+    # 走的是成功路徑，不是被 tuple 解包例外吃掉
+    assert [(etf_id, date) for etf_id, date, _ in writes] == [("00990A", trade_date)]
+    assert [log[2] for log in logs] == ["ok"]
+    out = capsys.readouterr().out
+    assert "Canary：00990A 2025-12-15" in out
+    assert "成功 1、已有快照跳過 0、驗證失敗 0、抓取失敗 0" in out
 
 
 # --- 日期語意 gate（2026-07-31 實測後新增）-------------------------------
@@ -377,7 +391,7 @@ def test_requests_the_offset_shifted_trading_day_not_the_target_date(monkeypatch
 
     def fetch_at(_entry, date):
         requested.append(date)
-        return _holdings(), date - dt.timedelta(days=1)
+        return _holdings(), dt.date(2026, 7, 24)   # 請求日的前一交易日
 
     module = SimpleNamespace(fetch_at=fetch_at, HISTORY_REQUEST_OFFSET=1)
     monkeypatch.setattr(
@@ -429,7 +443,8 @@ def test_refuses_to_write_when_upstream_returns_another_days_holdings(monkeypatc
         monkeypatch, listing={"00981A": WEEK[1]}, trading_dates=WEEK
     )
 
-    backfill_history.main([])
+    with pytest.raises(SystemExit):
+        backfill_history.main([])
 
     assert writes == []
     assert logs[0][:3] == ("00981A", dt.date(2026, 7, 24), "fail")
@@ -454,7 +469,8 @@ def test_date_gate_holds_even_when_adjacent_days_have_identical_holdings(
         monkeypatch, listing={"00981A": WEEK[0]}, trading_dates=WEEK
     )
 
-    backfill_history.main([])
+    with pytest.raises(SystemExit):
+        backfill_history.main([])
 
     # 只有 07-23 這天的資料日對得上，其餘兩天必須被擋下
     assert [date for _, date, _ in writes] == [dt.date(2026, 7, 23)]
@@ -475,7 +491,8 @@ def test_missing_source_date_is_refused_rather_than_trusted(monkeypatch):
         monkeypatch, listing={"00981A": WEEK[2]}, trading_dates=WEEK
     )
 
-    backfill_history.main([])
+    with pytest.raises(SystemExit):
+        backfill_history.main([])
 
     assert writes == []
     assert logs[0][2] == "fail"
@@ -538,3 +555,92 @@ def test_canary_widens_the_calendar_window_so_the_offset_has_neighbours(
 
     assert captured["window"][0] < dt.date(2026, 7, 24) < captured["window"][1]
     assert requested == [dt.date(2026, 7, 27)]
+
+
+# --- 回補與事件重建拆成兩階段（Evaluator P1-2）-----------------------------
+# 日期語意失敗時不得逕自重建 holding_change，否則「先回報再決定」形同虛設。
+
+def test_backfill_does_not_rebuild_changes_by_default(monkeypatch, capsys):
+    rebuilt = []
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: (_holdings(), date),
+        HISTORY_REQUEST_OFFSET=0,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, _ = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[0]}, trading_dates=WEEK
+    )
+    monkeypatch.setattr(backfill_history, "rebuild_holding_changes", rebuilt.append)
+
+    backfill_history.main([])
+
+    assert writes and rebuilt == []
+    assert "--rebuild-changes" in capsys.readouterr().out
+
+
+def test_rebuild_changes_flag_rebuilds_without_fetching_anything(monkeypatch):
+    fetched, rebuilt = [], []
+
+    def fetch_at(_entry, date):
+        fetched.append(date)
+        return _holdings(), date
+
+    module = SimpleNamespace(fetch_at=fetch_at, HISTORY_REQUEST_OFFSET=0)
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, _ = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[0]}, trading_dates=WEEK
+    )
+    monkeypatch.setattr(backfill_history, "rebuild_holding_changes", rebuilt.append)
+
+    backfill_history.main(["--rebuild-changes"])
+
+    assert fetched == []
+    assert writes == []
+    assert rebuilt == [["00981A"]]
+
+
+def test_any_source_date_mismatch_exits_non_zero(monkeypatch):
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: (_holdings(), WEEK[0]),
+        HISTORY_REQUEST_OFFSET=0,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    _stub_db(monkeypatch, listing={"00981A": WEEK[0]}, trading_dates=WEEK)
+
+    with pytest.raises(SystemExit) as ex:
+        backfill_history.main([])
+
+    assert ex.value.code != 0
+
+
+def test_ordinary_validation_failure_still_exits_zero(monkeypatch):
+    """00990A 2025-12-15 的 50.80% 屬已知且可接受的驗證失敗，不該讓整輪失敗。"""
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: ([Holding("2330", 1000, 50.8)], date),
+        HISTORY_REQUEST_OFFSET=0,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    writes, logs = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[0]}, trading_dates=WEEK
+    )
+
+    backfill_history.main([])  # 不得 raise SystemExit
+
+    assert writes == []
+    assert all(log[2] == "fail" for log in logs)

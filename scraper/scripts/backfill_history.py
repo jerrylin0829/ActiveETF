@@ -8,19 +8,28 @@ import datetime as dt
 import argparse
 import time
 import traceback
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from zoneinfo import ZoneInfo
 
 from activeetf import db, metrics
 from activeetf.adapters import base as adapter_base
-from activeetf.backfill import backfill_targets, request_date_for
+from activeetf.backfill import (
+    backfill_targets,
+    discover_adapters,
+    request_date_for,
+)
 from activeetf.diff import diff_snapshots
 from activeetf.models import Change, Holding
-from activeetf.registry import EtfEntry, entries
-from activeetf.validate import ValidationError, validate, validate_source_date
+from activeetf.registry import entries
+from activeetf.validate import (
+    SourceDateMismatch,
+    ValidationError,
+    validate,
+    validate_source_date,
+)
 
 PAUSE_SECONDS = 2.0
-# canary 只給一天，但位移需要前後交易日，故查日曆時往兩邊多要一段
+# 位移換算需要目標日前後的交易日，故查日曆時往兩邊各多要一段
 CANARY_WINDOW = dt.timedelta(days=14)
 
 
@@ -35,31 +44,21 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=dt.date.fromisoformat,
         help="只處理指定交易日（YYYY-MM-DD）；必須搭配 --etf-id",
     )
+    parser.add_argument(
+        "--rebuild-changes",
+        action="store_true",
+        help="只重建 holding_change，不抓任何資料；須先確認回補的失敗分布",
+    )
     args = parser.parse_args(argv)
     if (args.etf_id is None) != (args.date is None):
         parser.error("--etf-id 與 --date 必須一起提供")
+    if args.rebuild_changes and args.etf_id is not None:
+        parser.error("--rebuild-changes 不可與 --etf-id／--date 併用")
     return args
 
 
 def _today() -> dt.date:
     return dt.datetime.now(ZoneInfo("Asia/Taipei")).date()
-
-
-def discover_adapters(
-    registry_entries: Iterable[EtfEntry],
-) -> tuple[dict[str, tuple[EtfEntry, object]], list[str]]:
-    """Split registry entries by the optional historical-fetch capability."""
-    supported: dict[str, tuple[EtfEntry, object]] = {}
-    skipped: list[str] = []
-    for entry in registry_entries:
-        if not entry.adapter:
-            continue
-        module = adapter_base.load(entry.adapter)
-        if adapter_base.supports_history(module):
-            supported[entry.etf_id] = (entry, module)
-        else:
-            skipped.append(f"{entry.etf_id}({entry.adapter})")
-    return supported, skipped
 
 
 def build_holding_changes(
@@ -129,6 +128,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
 
     eligible_ids = sorted(listing_dates)
+    if args.rebuild_changes:
+        print("重建 holding_change（不抓取任何資料）：")
+        rebuild_holding_changes(eligible_ids)
+        return
+
     if canary:
         trading_dates = db.benchmark_trading_dates(
             args.date - CANARY_WINDOW,
@@ -137,12 +141,15 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.date not in trading_dates:
             raise SystemExit(f"指定日期不是 0050 有效交易日：{args.date}")
     else:
+        # 兩端各留一段：位移換算需要目標範圍外的相鄰交易日
         trading_dates = db.benchmark_trading_dates(
-            min(listing_dates.values()),
-            _today(),
+            min(listing_dates.values()) - CANARY_WINDOW,
+            _today() + CANARY_WINDOW,
         )
-    # 日曆要完整（位移換算需要目標日的前後交易日），但 canary 只跑指定那一天
-    target_dates = [args.date] if canary else trading_dates
+    # 日曆要完整（位移換算需要目標日的前後交易日），但目標只到今天為止
+    target_dates = (
+        [args.date] if canary else [d for d in trading_dates if d <= _today()]
+    )
     existing = db.existing_snapshot_keys(eligible_ids)
     all_targets = backfill_targets(
         target_dates,
@@ -158,19 +165,19 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
 
     known_ids = db.known_stock_ids() if targets else set()
-    ok = validation_failed = fetch_failed = 0
+    ok = validation_failed = fetch_failed = source_date_failed = 0
     for index, (etf_id, trade_date) in enumerate(targets, 1):
         entry, module = supported[etf_id]
         try:
             request_date = request_date_for(
                 trading_dates,
                 trade_date,
-                adapter_base.history_request_offset(module),
+                adapter_base.history_request_offset(module, etf_id),
             )
             if request_date is None:
                 raise LookupError(
                     f"交易日曆內找不到 {trade_date} 對應的請求日"
-                    f"（位移 {adapter_base.history_request_offset(module)} 個交易日）"
+                    f"（位移 {adapter_base.history_request_offset(module, etf_id)} 個交易日）"
                 )
             holdings, upstream_date = module.fetch_at(entry, request_date)
             validate_source_date(upstream_date, trade_date)
@@ -196,6 +203,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
             db.log_scrape(etf_id, trade_date, "fail", detail)
             validation_failed += 1
+            if isinstance(ex, SourceDateMismatch):
+                source_date_failed += 1
         except Exception as ex:
             detail = (
                 f"backfill {type(ex).__name__}: {ex}\n"
@@ -212,16 +221,27 @@ def main(argv: Sequence[str] | None = None) -> None:
         if index < len(targets):
             time.sleep(PAUSE_SECONDS)
 
-    if not canary:
-        print("\n重建 holding_change：")
-        rebuild_holding_changes(eligible_ids)
-    else:
+    if canary:
         print("Canary 完成：未重建 holding_change；可確認 fetch、validation、snapshot/log 行為。")
     print(
         f"\n完成：成功 {ok}、已有快照跳過 {skipped_existing}、"
         f"驗證失敗 {validation_failed}、抓取失敗 {fetch_failed}"
         "（失敗明細見 scrape_log）"
     )
+    if source_date_failed:
+        # 事件由快照歷史重建，日期錯位會讓整段歷史失真——先查明再決定，不自動往下走
+        raise SystemExit(
+            f"其中 {source_date_failed} 筆為上游資料日不符（SourceDateMismatch）。"
+            "\n已中止：未重建 holding_change。請先查明失敗分布"
+            "（集中在某段期間或某一家？），確認後再執行："
+            "\n  uv run python scripts/backfill_history.py --rebuild-changes"
+        )
+    if not canary:
+        print(
+            "\n快照回補完成，**尚未**重建 holding_change。"
+            "確認上方失敗分布後再執行："
+            "\n  uv run python scripts/backfill_history.py --rebuild-changes"
+        )
     print("下一步（由 User 或授權 session 執行）：")
     print("  uv run python scripts/backfill_aggregates.py")
     print(
