@@ -1,6 +1,7 @@
 import datetime as dt
 
-from activeetf.backfill import backfill_targets, request_date_for
+from activeetf.backfill import backfill_targets, plan_repair, request_date_for
+from activeetf.models import Holding
 
 D = dt.date
 
@@ -84,3 +85,71 @@ def test_rotates_between_etfs_to_avoid_hammering_one_host():
         "00981A",
         "00990A",
     ]
+
+
+# --- 觀察部位缺口的 bounded append-only 修復（Evaluator P1-1）---------------
+# 只補「DB 缺少且上游權重為 0」的列；既有列必須與上游完全一致才准動。
+
+def _h(sid, shares, weight):
+    return Holding(sid, shares, weight)
+
+
+def test_plan_repair_lists_only_missing_zero_weight_rows():
+    existing = {"2330": _h("2330", 1000, 50.0)}
+    upstream = {
+        "2330": _h("2330", 1000, 50.0),
+        "6488": _h("6488", 500, 0.0),
+        "4904": _h("4904", 300, 0.0),
+    }
+
+    plan = plan_repair(existing, upstream)
+
+    assert plan.safe is True
+    assert sorted(h.stock_id for h in plan.missing_observations) == ["4904", "6488"]
+
+
+def test_plan_repair_refuses_when_an_existing_row_has_different_shares():
+    existing = {"2330": _h("2330", 1000, 50.0)}
+    upstream = {"2330": _h("2330", 1100, 50.0), "6488": _h("6488", 500, 0.0)}
+
+    plan = plan_repair(existing, upstream)
+
+    assert plan.safe is False
+    assert plan.conflicts == ["2330"]
+
+
+def test_plan_repair_refuses_when_an_existing_row_has_different_weight():
+    existing = {"2330": _h("2330", 1000, 50.0)}
+    upstream = {"2330": _h("2330", 1000, 49.5)}
+
+    plan = plan_repair(existing, upstream)
+
+    assert plan.safe is False
+    assert plan.conflicts == ["2330"]
+
+
+def test_plan_repair_tolerates_db_numeric_rounding_to_four_places():
+    existing = {"2330": _h("2330", 1000, 16.9100)}
+    upstream = {"2330": _h("2330", 1000, 16.910000001)}
+
+    assert plan_repair(existing, upstream).safe is True
+
+
+def test_plan_repair_refuses_when_a_missing_row_carries_real_weight():
+    """缺的不是觀察部位就不是這個缺口，必須停下來查，不可順手補。"""
+    existing = {"2330": _h("2330", 1000, 50.0)}
+    upstream = {"2330": _h("2330", 1000, 50.0), "2317": _h("2317", 800, 3.2)}
+
+    plan = plan_repair(existing, upstream)
+
+    assert plan.safe is False
+    assert plan.unexpected_missing == ["2317"]
+
+
+def test_plan_repair_is_empty_when_snapshot_already_complete():
+    rows = {"2330": _h("2330", 1000, 50.0), "6488": _h("6488", 500, 0.0)}
+
+    plan = plan_repair(rows, dict(rows))
+
+    assert plan.safe is True
+    assert plan.missing_observations == []
