@@ -328,6 +328,33 @@ describe("fetchTodayOverview", () => {
     expect(result.radarError).toContain("radar page 2 failed");
   });
 
+  it("hides radar narratives when the trading-date window query fails", async () => {
+    installSupabaseDouble(
+      {
+        holding_change: [
+          {
+            etf_id: "00987A",
+            trade_date: "2026-07-14",
+            stock_id: "2486",
+            change_type: "NEW",
+            shares_delta: 1000,
+            weight_delta_pct: 1,
+            etf: { name: "台新優勢成長", issuer: "台新" },
+          },
+        ],
+      },
+      (execution) =>
+        execution.table === "dashboard_holding_snapshot_dates"
+          ? "trading dates failed"
+          : null,
+    );
+
+    const result = await fetchTodayOverview({ date: "2026-07-14", range: "day" });
+
+    expect(result.radarNarratives).toEqual([]);
+    expect(result.radarError).toContain("trading dates failed");
+  });
+
   it.each([
     ["week_prev", "2026-07-13", "2026-07-17"],
     ["month_prev", "2026-06-01", "2026-06-30"],

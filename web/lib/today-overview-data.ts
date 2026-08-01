@@ -465,8 +465,9 @@ export async function fetchTodayOverview({
     openPositionsResult.error,
   ].filter(Boolean);
 
-  const radarError = radarChangesResult.error
-    ? `新倉雷達事件讀取不完整：${radarChangesResult.error}`
+  const radarErrors = [tradingDatesResult.error, radarChangesResult.error].filter(Boolean);
+  const radarError = radarErrors.length > 0
+    ? `新倉雷達資料讀取不完整：${radarErrors.join("；")}`
     : null;
   const radarPositions = radarError
     ? []
