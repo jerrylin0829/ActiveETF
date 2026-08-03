@@ -4,9 +4,14 @@ PR #19 之前，部分 adapter 會丟棄 `weight_pct = 0` 的持股，導致該�
 每日快照缺觀察部位。缺列會讓 diff 把「實質↔觀察」誤判成完整進出（`diff.py`
 的 NEW／EXIT 對缺列無門檻），產生假事件。
 
-**Bounded append-only**：只 INSERT「DB 缺少且上游權重為 0」的列，不 update、
-不 delete；既有列必須與上游逐檔完全一致才動該日，且上游資料日必須等於該
-`trade_date`。任一條件不符即整日跳過並報告，不寫入。
+**Bounded append-only**：
+- 範圍必須由呼叫端**明確指定**（`--etf-id` 可重複、`--from`、`--to` 皆為必填）；
+  不接受「掃全部」，否則完整回補後等於再對上游發數千次請求。
+- 只 INSERT「DB 缺少且上游權重為 0」的列，不 update、不 delete。
+- 既有列必須與上游逐檔完全一致，且上游資料日等於**逐檔算出的期望資料日**才動該日。
+- 任一條件不符即整日跳過、不寫入，且**整輪以非零 exit code 結束**——帶著未修復的
+  缺口去重建事件，等於把假事件固化下來。
+- 每一次對上游的請求後都會間隔 `PAUSE_SECONDS`，失敗（含 503）也不例外。
 
 預設為 dry-run；`--apply` 才寫入，且僅由 User 或明確授權 session 執行。
 """
@@ -30,20 +35,37 @@ CALENDAR_MARGIN = dt.timedelta(days=14)
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="補回既有快照缺少的觀察部位")
     parser.add_argument("--apply", action="store_true", help="實際寫入（預設只報告）")
-    parser.add_argument("--from", dest="start", type=dt.date.fromisoformat)
-    parser.add_argument("--to", dest="end", type=dt.date.fromisoformat)
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--etf-id",
+        action="append",
+        required=True,
+        dest="etf_ids",
+        help="要修復的 ETF（可重複指定）；必填，不接受掃全部",
+    )
+    parser.add_argument(
+        "--from", dest="start", type=dt.date.fromisoformat, required=True
+    )
+    parser.add_argument(
+        "--to", dest="end", type=dt.date.fromisoformat, required=True
+    )
+    args = parser.parse_args(argv)
+    if args.start > args.end:
+        parser.error("--from 不可晚於 --to")
+    return args
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     supported, _ = discover_adapters(entries())
-    existing_keys = sorted(db.existing_snapshot_keys(sorted(supported)))
+    unknown = [etf_id for etf_id in args.etf_ids if etf_id not in supported]
+    if unknown:
+        raise SystemExit(f"這些 ETF 不支援歷史查詢或不存在：{unknown}")
+
+    existing_keys = sorted(db.existing_snapshot_keys(sorted(args.etf_ids)))
     targets = [
         (etf_id, trade_date)
         for etf_id, trade_date in existing_keys
-        if (args.start is None or trade_date >= args.start)
-        and (args.end is None or trade_date <= args.end)
+        if args.start <= trade_date <= args.end
     ]
     if not targets:
         print("沒有符合範圍的既有快照。")
@@ -58,17 +80,19 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     repaired = complete = skipped = 0
     inserted_rows = 0
-    for index, (etf_id, trade_date) in enumerate(targets, 1):
+    for etf_id, trade_date in targets:
         entry, module = supported[etf_id]
-        offset = adapter_base.history_request_offset(module, etf_id)
-        request_date = request_date_for(calendar, trade_date, offset)
+        request_date = request_date_for(
+            calendar, trade_date, adapter_base.history_request_offset(module, etf_id)
+        )
+        expected_source = request_date_for(
+            calendar, trade_date, adapter_base.history_source_offset(module, etf_id)
+        )
         if request_date is None:
             print(f"  {etf_id} {trade_date}：交易日曆換算不出請求日，跳過")
             skipped += 1
             continue
-        expected_source = request_date_for(
-            calendar, trade_date, adapter_base.history_source_offset(module, etf_id)
-        )
+
         try:
             holdings, upstream_date = module.fetch_at(entry, request_date)
             validate_source_date(upstream_date, expected_source)
@@ -80,6 +104,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(f"  {etf_id} {trade_date}：{type(ex).__name__}: {ex}，跳過")
             skipped += 1
             continue
+        finally:
+            # 失敗（含 503）同樣要間隔，否則會連續打上游
+            time.sleep(PAUSE_SECONDS)
 
         plan = plan_repair(
             db.load_snapshot(etf_id, trade_date),
@@ -102,17 +129,17 @@ def main(argv: Sequence[str] | None = None) -> None:
             repaired += 1
             inserted_rows += count
 
-        if index < len(targets):
-            time.sleep(PAUSE_SECONDS)
-
     print(
-        f"\n完成：需修復 {repaired} 個交易日（共 {inserted_rows} 列）、"
+        f"\n完成：需修復 {repaired} 個 ETF-交易日（共 {inserted_rows} 列）、"
         f"已完整 {complete} 個、跳過 {skipped} 個"
     )
     if not args.apply and repaired:
         print("以上為 DRY-RUN。確認無誤後加 --apply 實際寫入。")
     if skipped:
-        print("有跳過的日期：請先查明原因，不可略過不看。")
+        raise SystemExit(
+            f"有 {skipped} 個 ETF-交易日被跳過，未修復。"
+            "\n請先查明原因——帶著未修復的缺口重建事件會把假事件固化下來。"
+        )
 
 
 if __name__ == "__main__":

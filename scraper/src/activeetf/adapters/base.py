@@ -47,8 +47,8 @@ def supports_history(module: object) -> bool:
 def history_request_offset(module: object, etf_id: str | None = None) -> int:
     """目標交易日 → 請求日的位移，單位為**交易日**（預設 0 = 請求日即資料日）。
 
-    同一支 adapter 底下不同 ETF 的發布時程可能不同（實測：統一的全球型 00988A
-    比台股型 00981A 多一個交易日），故容許以 `HISTORY_REQUEST_OFFSETS` 逐檔覆寫。
+    容許以 `HISTORY_REQUEST_OFFSETS` 逐檔覆寫。（注意：統一的全球型 00988A 差在
+    「期望資料日」而非請求位移——見 `history_source_offset`。）
     """
     per_etf = getattr(module, "HISTORY_REQUEST_OFFSETS", {})
     if etf_id is not None and etf_id in per_etf:
@@ -70,8 +70,19 @@ def history_source_offset(module: object, etf_id: str | None = None) -> int:
 
 
 def unique_upstream_date(values: Iterable[object]) -> dt.date | None:
-    """多列都帶資料日時要求一致；不一致代表上游狀態不明，回 None 不猜。"""
-    parsed = {date for date in map(parse_upstream_date, values) if date}
+    """多列都帶資料日時要求一致；不一致或解不出來一律回 None，不猜。
+
+    空值（`None`／空字串）視為「這一列沒有宣告日期」而略過；**有值卻解析不出來
+    代表上游格式變了**，不能靠其他列蒙混過關，直接回 None。
+    """
+    parsed: set[dt.date] = set()
+    for value in values:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        date = parse_upstream_date(value)
+        if date is None:
+            return None
+        parsed.add(date)
     return parsed.pop() if len(parsed) == 1 else None
 
 

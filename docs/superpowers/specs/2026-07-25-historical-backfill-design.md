@@ -33,7 +33,7 @@
 | 歷史指標 | `etf_metrics` **只重算最新一日**（歷史指標列無人讀取，日後需要再補） |
 | Adapter 介面 | 新增**可選能力** `fetch_at(entry, date)`，不改既有 `fetch(entry)` |
 | 起始日取得 | **不新增 DB 欄位**，改以 view 即時衍生 |
-| 日期語意（2026-07-31 追加） | 請求日以**交易日**位移換算，寫入前核對上游自報資料日等於目標 `trade_date`（見 §3.1）|
+| 日期語意（2026-07-31 追加） | 請求日以**交易日**位移換算，寫入前核對上游自報資料日等於**逐 ETF 算出的期望資料日**（`expected_source_date`，見 §3.1；多數檔等於 `trade_date`，00988A 為 `T-1`）|
 | 回補與事件重建（2026-07-31 追加） | **拆成兩階段**：回補只寫快照；`holding_change` 重建須另外明確執行 `--rebuild-changes`。任一筆 `SourceDateMismatch` 即以非零 exit code 中止，不得逕自重建（見 §4.5）|
 | 2026-07-13～07-23 缺觀察部位（2026-07-31 追加） | **以 bounded append-only 修復**（只 INSERT 缺少的零權重列，不 update／delete）；見 §9.1 |
 
@@ -49,8 +49,12 @@ class HistoricalAdapter(Protocol):
 def supports_history(module) -> bool:
     return callable(getattr(module, "fetch_at", None))
 
-def history_request_offset(module) -> int:      # 單位：交易日，預設 0
-    return getattr(module, "HISTORY_REQUEST_OFFSET", 0)
+# 兩個位移都以「交易日」為單位、預設 0，且都可用 *_OFFSETS dict 逐檔覆寫
+def history_request_offset(module, etf_id=None) -> int:   # 目標日 → 請求日
+    ...
+
+def history_source_offset(module, etf_id=None) -> int:    # 目標日 → 期望資料日
+    ...
 ```
 
 - 僅 uni／yuanta／cathay／fsitc／allianz／ctbc 六個模組實作 `fetch_at`，**重用同模組既有的 `parse()`**，只有請求建構不同
@@ -67,19 +71,20 @@ def history_request_offset(module) -> int:      # 單位：交易日，預設 0
 
 **「上游接受日期參數」不等於「請求日就是資料日」。** 2026-07-31 以正式 DB 既有快照逐檔股數比對六支 adapter：
 
-| adapter | `fetch_at(D)` 的內容實際等於 | `HISTORY_REQUEST_OFFSET` | 核對用的上游欄位 |
-|---|---|---|---|
-| 國泰 `cathay` | `D` | 0 | 表頭「YYYY/MM/DD基金持股權重」 |
-| 中信 `ctbc` | `D` | 0 | `Data[].公告日` |
-| 統一 `uni` | `D` 的前一交易日 | +1 | `pcf[].TranDate` |
-| 第一金 `fsitc` | `D` 的前一交易日 | +1 | 各列 `sdate` |
-| 安聯 `allianz` | `D` 的前一交易日 | +1 | `Entries.CNavDt` |
-| 元大 `yuanta` | `D` 的次一交易日 | −1 | `PCF.upddate` |
+| adapter／ETF | `fetch_at(D)` 的內容實際等於 | 請求位移 | 期望資料日位移 | 核對用的上游欄位 |
+|---|---|---|---|---|
+| 國泰 `cathay` | `D` | 0 | 0 | 表頭「YYYY/MM/DD基金持股權重」 |
+| 中信 `ctbc` | `D` | 0 | 0 | `Data[].公告日` |
+| 統一 `uni`（00981A、00403A） | `D` 的前一交易日 | +1 | 0 | `pcf[].TranDate` |
+| 統一 `uni`（**00988A**） | `D` 的前一交易日 | +1 | **−1** | `pcf[].TranDate` |
+| 第一金 `fsitc` | `D` 的前一交易日 | +1 | 0 | 各列 `sdate` |
+| 安聯 `allianz` | `D` 的前一交易日 | +1 | 0 | `Entries.CNavDt` |
+| 元大 `yuanta` | `D` 的次一交易日 | −1 | 0 | `PCF.upddate` |
 
 規則：
 
 1. **請求日以交易日位移換算**：`request_date = 交易日曆[index(目標交易日) + HISTORY_REQUEST_OFFSET]`。**不可用 `目標日 ± 1 day`**——週末與連假會錯開（例：目標 2026-07-24 週五、位移 +1，正確請求日是 07-27 週一）。位移後超出日曆範圍時不得猜日期，記 fail 並略過該日。
-2. **寫入前核對資料日**：`validate_source_date(source_date, trade_date)`，不相等或取不到一律 `SourceDateMismatch`（`ValidationError` 子類，故不寫入且計入驗證失敗）。
+2. **寫入前核對資料日**：`validate_source_date(source_date, expected_source_date)`。`expected_source_date = 交易日曆[index(trade_date) + HISTORY_SOURCE_OFFSET]`（見第 4 點）。不相等、或**任一邊為 `None`**，一律 `SourceDateMismatch`（`ValidationError` 子類，故不寫入且計入驗證失敗）。`None` 也必須拒絕——日曆邊界算不出期望日、上游又沒回日期時，`None == None` 會讓整個 gate 失效。
 3. **核對欄位由各 adapter 自行宣告**，因為每日路徑的「as-of 語意」本來就因投信而異：中信 `DB[T]` 對應公告日 `T`（淨值日 `T-1`），安聯 `DB[T]` 卻對應 `CNavDt = T`。統一必須用 `TranDate` 而非 `PostDate`——`PostDate` 等於請求日，用它核對等於什麼都沒檢查。
 4. **「該有的資料日」不一定等於 `trade_date`，也是逐檔的**。判準永遠是「與每日路徑一致」，不是「資料日等於 trade_date」——後者只是多數情況下的巧合。實測統一的全球型 **00988A**：其每日路徑存的是 `TranDate = T-1` 的那份 PCF（以 +1 位移取得的內容與 DB 逐檔完全相符），所以對這檔的斷言要求資料日是 `T-1`。以 `HISTORY_SOURCE_OFFSETS: dict[str, int]`（單位交易日、預設 0）宣告；請求位移另有 `HISTORY_REQUEST_OFFSETS`。其餘 11 檔（含三檔全球型 00402A、00983A、00990A）的資料日皆等於 `trade_date`。
 
@@ -104,7 +109,7 @@ def history_request_offset(module) -> int:      # 單位：交易日，預設 0
 
 ### 4.3 驗證（不放寬）
 
-**第四道（回補專用）**：`validate_source_date(上游自報資料日, 目標 trade_date)`，見 §3.1。先於三道驗證執行——日期不對時其餘檢查沒有意義。
+**第四道（回補專用）**：`validate_source_date(上游自報資料日, 該檔的期望資料日)`，見 §3.1。先於三道驗證執行——日期不對時其餘檢查沒有意義。
 
 三道驗證原封套用於歷史資料：權重總和 70–101%、筆數 vs 前日無突變、股票代號存在於 `stock_info`。任一不過即**跳過該日、不寫入**，並記入 `scrape_log`（`trade_date` 為該歷史日）。錯資料比缺資料危險，此原則不因回補而放寬。
 
@@ -194,7 +199,7 @@ PR #19（觀察部位）之前，部分 adapter 會丟棄 `weight_pct = 0` 的�
 
 **裁決：以 bounded append-only 修復，不 update、不 delete。** `scripts/repair_observations.py`（預設 dry-run，`--apply` 才寫入）逐一檢查既有快照日：
 
-1. 以 §3.1 的位移換算請求日，並核對上游資料日等於該 `trade_date`；不符即跳過該日。
+1. 以 §3.1 的位移換算請求日，並核對上游資料日等於該檔的**期望資料日**；不符即跳過該日。
 2. **既有列必須與上游逐檔完全一致**（股數相等、權重四捨五入至 4 位後相等，比照 `numeric(8,4)`）；任一列不符即跳過該日、不寫入。
 3. DB 缺少的列**必須全部是 `weight_pct = 0`**；只要有一列帶實質權重，就不是這個已知缺口，跳過該日並報告。
 4. 三者皆過才 `INSERT ... ON CONFLICT DO NOTHING` 補上缺的觀察部位列。

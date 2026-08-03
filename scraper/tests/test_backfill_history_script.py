@@ -686,3 +686,33 @@ def test_source_offset_zero_still_requires_the_date_to_equal_the_target(monkeypa
         backfill_history.main([])
 
     assert writes == []
+
+
+def test_calendar_edge_cannot_smuggle_a_write_through_a_none_expected_date(
+    monkeypatch,
+):
+    """00988A 型（期望資料日 T-1）碰到日曆左緣：期望日算不出來，上游也沒回日期。
+
+    修正前兩邊都是 None，gate 會判定相等而放行——等於把來路不明的持股寫進去。
+    """
+    module = SimpleNamespace(
+        fetch_at=lambda _entry, date: (_holdings(), None),
+        HISTORY_REQUEST_OFFSET=1,
+        HISTORY_SOURCE_OFFSET=-1,
+    )
+    monkeypatch.setattr(
+        backfill_history,
+        "discover_adapters",
+        lambda _e: ({"00981A": (_entry(), module)}, []),
+    )
+    # 目標就是日曆第一天，往前一個交易日不存在
+    writes, logs = _stub_db(
+        monkeypatch, listing={"00981A": WEEK[0]}, trading_dates=WEEK
+    )
+
+    with pytest.raises(SystemExit):
+        backfill_history.main([])
+
+    assert writes == []
+    assert logs[0][:3] == ("00981A", WEEK[0], "fail")
+    assert "SourceDateMismatch" in logs[0][3]

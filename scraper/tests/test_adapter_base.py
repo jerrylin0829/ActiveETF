@@ -127,3 +127,9 @@ def test_history_request_offset_prefers_the_per_etf_override():
 def test_history_request_offset_without_etf_id_uses_the_default():
     module = types.SimpleNamespace(HISTORY_REQUEST_OFFSET=-1)
     assert base.history_request_offset(module) == -1
+
+
+def test_unique_upstream_date_rejects_when_any_present_value_is_unparsable():
+    """有值卻解不出日期代表格式變了，不能靠其他列蒙混過關。"""
+    assert base.unique_upstream_date(["2026-07-27", "n/a"]) is None
+    assert base.unique_upstream_date(["2026-07-27", "/Date(abc)/"]) is None

@@ -74,3 +74,14 @@ def test_source_date_mismatch_is_a_validation_error_so_it_never_writes():
 def test_missing_source_date_is_rejected_rather_than_assumed_correct():
     with pytest.raises(SourceDateMismatch):
         validate_source_date(None, dt.date(2026, 7, 28))
+
+
+def test_both_dates_missing_is_rejected_rather_than_treated_as_equal():
+    """日曆邊界取不到期望日、上游又沒回日期時，None == None 不得放行。"""
+    with pytest.raises(SourceDateMismatch):
+        validate_source_date(None, None)
+
+
+def test_missing_expected_date_is_rejected():
+    with pytest.raises(SourceDateMismatch):
+        validate_source_date(dt.date(2026, 7, 28), None)
