@@ -53,8 +53,8 @@ def test_global_universe_skips_id_check():
     validate([_h("NVDA", 80)], prev_count=None, known_ids=KNOWN, universe="global")
 
 
-# 回補專用第四道：上游回傳的資料日必須等於要寫入的 trade_date
-# （2026-07-31 實測：六支 fetch_at 有四支的日期語意與每日路徑不一致）
+# 回補專用第四道：上游回傳的資料日必須等於該檔的期望資料日
+# （多數檔等於 trade_date，00988A 為 T-1；見歷史回補 spec §3.1）
 
 def test_source_date_equal_to_trade_date_passes():
     validate_source_date(dt.date(2026, 7, 28), dt.date(2026, 7, 28))

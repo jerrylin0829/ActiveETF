@@ -12,7 +12,7 @@ class ValidationError(Exception):
 
 
 class SourceDateMismatch(ValidationError):
-    """上游回傳的資料日不等於要寫入的 trade_date。"""
+    """上游回傳的資料日不等於該檔的期望資料日（見歷史回補 spec §3.1）。"""
 
 
 def validate_source_date(

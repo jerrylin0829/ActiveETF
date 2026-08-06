@@ -26,7 +26,8 @@ class HistoricalAdapter(Protocol):
     """可選能力：支援指定歷史日期抓取。
 
     回傳 `(holdings, source_date)`——`source_date` 是**上游自報的資料日**，
-    由回補腳本核對是否等於要寫入的 trade_date。只回持股會讓日期錯位無法察覺
+    由回補腳本核對是否等於該檔的**期望資料日**（`history_source_offset`，多數檔
+    等於 `trade_date`，00988A 為 `T-1`）。只回持股會讓日期錯位無法察覺
     （2026-07-31 實測：六支有四支的請求日不等於資料日）。
     """
 

@@ -341,7 +341,7 @@ def test_canary_mode_limits_one_etf_and_date_without_rebuilding_history(
 
 # --- 日期語意 gate（2026-07-31 實測後新增）-------------------------------
 # 六支 fetch_at 有四支的請求日不等於資料日。腳本必須（a）依交易日位移換算請求日、
-# （b）寫入前核對上游自報的資料日等於目標 trade_date。
+# （b）寫入前核對上游自報的資料日等於該檔的期望資料日。
 
 def _stub_db(monkeypatch, *, listing, trading_dates, existing=frozenset()):
     writes, logs = [], []
