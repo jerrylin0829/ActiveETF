@@ -1,5 +1,6 @@
 """Supabase 持久層。唯一碰 SQL 的模組；業務邏輯（validate/diff/metrics）全部與 DB 解耦。"""
 import os, datetime as dt
+from collections.abc import Callable
 from contextlib import contextmanager
 import psycopg
 from activeetf.models import Holding, Change
@@ -28,7 +29,7 @@ def sync_etf(entries) -> None:
 
 
 def write_snapshot(etf_id: str, d: dt.date, holdings: list[Holding]) -> None:
-    with conn() as c, c.cursor() as cur:
+    with conn() as c, c.transaction(), c.cursor() as cur:
         cur.executemany(
             """insert into holdings_snapshot (etf_id, trade_date, stock_id, shares, weight_pct)
                values (%s,%s,%s,%s,%s) on conflict do nothing""",
@@ -66,6 +67,56 @@ def write_changes(etf_id: str, d: dt.date, changes: list[Change]) -> None:
                    weight_delta_pct=excluded.weight_delta_pct""",
             [(etf_id, d, ch.stock_id, ch.change_type, ch.shares_delta, ch.weight_delta_pct)
              for ch in changes])
+
+
+def rebuild_changes_from_snapshot_history(
+    etf_id: str,
+    build_changes: Callable[
+        [dict[dt.date, dict[str, Holding]]],
+        list[tuple[dt.date, Change]],
+    ],
+) -> int:
+    """Lock the fact/derived boundary and replace one ETF's event history."""
+    with conn() as c, c.transaction():
+        # Serialize both snapshot inserts and event writes while replaying the
+        # append-only facts. The daily pipeline then lands wholly before/after.
+        c.execute("lock table holdings_snapshot in share mode")
+        c.execute("lock table holding_change in share row exclusive mode")
+        rows = c.execute(
+            """select trade_date, stock_id, shares, weight_pct
+               from holdings_snapshot
+               where etf_id = %s
+               order by trade_date, stock_id""",
+            (etf_id,),
+        ).fetchall()
+        history: dict[dt.date, dict[str, Holding]] = {}
+        for trade_date, stock_id, shares, weight_pct in rows:
+            history.setdefault(trade_date, {})[stock_id] = Holding(
+                stock_id,
+                int(shares),
+                float(weight_pct),
+            )
+        dated_changes = build_changes(history)
+        c.execute("delete from holding_change where etf_id = %s", (etf_id,))
+        with c.cursor() as cur:
+            cur.executemany(
+                """insert into holding_change
+                   (etf_id, trade_date, stock_id, change_type,
+                    shares_delta, weight_delta_pct)
+                   values (%s,%s,%s,%s,%s,%s)""",
+                [
+                    (
+                        etf_id,
+                        trade_date,
+                        change.stock_id,
+                        change.change_type,
+                        change.shares_delta,
+                        change.weight_delta_pct,
+                    )
+                    for trade_date, change in dated_changes
+                ],
+            )
+    return len(dated_changes)
 
 
 def scoring_events(etf_id: str, before: dt.date | None = None) -> list[tuple]:
@@ -152,6 +203,62 @@ def snapshot_trading_dates(upto: dt.date) -> list[dt.date]:
         rows = c.execute("""select distinct trade_date from holdings_snapshot
                             where trade_date <= %s order by 1""", (upto,)).fetchall()
     return [r[0] for r in rows]
+
+
+def existing_snapshot_keys(etf_ids: list[str]) -> set[tuple[str, dt.date]]:
+    """已入庫的 ETF 日期組合，作為回補冪等與續跑依據。"""
+    with conn() as c:
+        rows = c.execute(
+            """select distinct etf_id, trade_date
+               from holdings_snapshot
+               where etf_id = any(%s)""",
+            (etf_ids,),
+        ).fetchall()
+    return {(row[0], row[1]) for row in rows}
+
+
+def etf_listing_dates(etf_ids: list[str]) -> dict[str, dt.date]:
+    """以 ETF 最早的有效還原價日期近似上市日。"""
+    with conn() as c:
+        rows = c.execute(
+            """select stock_id, min(trade_date)
+               from stock_price
+               where stock_id = any(%s)
+                 and adj_close is not null
+                 and adj_close not in (
+                   'NaN'::numeric,
+                   'Infinity'::numeric,
+                   '-Infinity'::numeric
+                 )
+               group by stock_id""",
+            (etf_ids,),
+        ).fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
+def benchmark_trading_dates(
+    start: dt.date,
+    end: dt.date,
+    *,
+    benchmark_id: str = "0050",
+) -> list[dt.date]:
+    """以已快取的基準還原價取得真實交易日，不呼叫外部資料源。"""
+    with conn() as c:
+        rows = c.execute(
+            """select trade_date
+               from stock_price
+               where stock_id = %s
+                 and trade_date between %s and %s
+                 and adj_close is not null
+                 and adj_close not in (
+                   'NaN'::numeric,
+                   'Infinity'::numeric,
+                   '-Infinity'::numeric
+                 )
+               order by trade_date""",
+            (benchmark_id, start, end),
+        ).fetchall()
+    return [row[0] for row in rows]
 
 
 def latest_common_price_date(

@@ -1,3 +1,4 @@
+import datetime as dt
 from pathlib import Path
 
 from activeetf.adapters import cathay
@@ -58,3 +59,38 @@ def test_fetch_uses_latest_nav_date_for_official_weight_workbook(monkeypatch):
             {"FundCode": "EA", "SearchDate": "2026-07-08", "status": 1},
         ),
     ]
+
+
+def test_fetch_at_uses_iso_search_date(monkeypatch):
+    captured = {}
+
+    class Resp:
+        content = FIXTURE.read_bytes()
+
+        def raise_for_status(self):
+            pass
+
+    def fake_get(url, *, params, headers, timeout):
+        captured["url"] = url
+        captured.update(params)
+        return Resp()
+
+    monkeypatch.setattr(cathay.requests, "get", fake_get)
+
+    holdings, upstream_date = cathay.fetch_at(by_id("00400A"), dt.date(2026, 6, 15))
+
+    assert captured["SearchDate"] == "2026-06-15"
+    assert captured["FundCode"] == cathay._FUND_CODES["00400A"]
+    assert "GetETFInfoMain" not in captured["url"]
+    assert holdings[0].stock_id
+    assert upstream_date == dt.date(2026, 7, 8)
+
+
+def test_source_date_reads_workbook_title_row():
+    content = FIXTURE.read_bytes()
+
+    assert cathay.source_date(content) == dt.date(2026, 7, 8)
+
+
+def test_source_date_none_when_title_row_has_no_date():
+    assert cathay.source_date_from_rows([{"A": "基金持股權重"}]) is None

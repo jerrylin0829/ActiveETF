@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -54,3 +55,41 @@ def test_fetch_gets_antiforgery_token_then_posts_fund_id(monkeypatch):
     assert calls[1][1].endswith("/Fund/GetFundTradeInfo")
     assert calls[1][2]["X-XSRF-TOKEN"] == "xsrf-token"
     assert calls[1][3] == {"FundNo": "E0001", "Date": None}
+
+
+def test_fetch_at_sends_iso_date(monkeypatch):
+    captured = {}
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"Entries": {"DynamicTableData": []}}
+
+    class Session:
+        cookies = {"X-XSRF-TOKEN": "tok"}
+
+        def get(self, *args, **kwargs):
+            return Resp()
+
+        def post(self, url, *, headers, json, timeout):
+            captured.update(json)
+            return Resp()
+
+    monkeypatch.setattr(allianz.requests, "Session", Session)
+
+    allianz.fetch_at(by_id("00402A"), dt.date(2026, 6, 15))
+
+    assert captured["Date"] == "2026-06-15"
+    assert captured["FundNo"] == allianz._FUND_IDS["00402A"]
+
+
+def test_source_date_reads_nav_date_not_pcf_date():
+    payload = json.loads(FIXTURE.read_text())
+
+    assert allianz.source_date(payload) == dt.date(2026, 7, 8)
+
+
+def test_source_date_none_when_upstream_omits_it():
+    assert allianz.source_date({"Entries": {}}) is None

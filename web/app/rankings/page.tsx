@@ -3,6 +3,7 @@ import { AlertCircle } from "lucide-react";
 import { RankingsTable } from "@/components/rankings-table";
 import { SiteNav } from "@/components/site-nav";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { fetchHistoryRanges } from "@/lib/history-range";
 import { fetchRankingRows } from "@/lib/rankings-data";
 import { getLatestTradeDate } from "@/lib/rankings";
 
@@ -10,8 +11,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function RankingsPage() {
-  const result = await fetchRankingRows();
+  const [result, historyResult] = await Promise.all([
+    fetchRankingRows(),
+    fetchHistoryRanges(),
+  ]);
   const latestTradeDate = getLatestTradeDate(result.rows);
+  const historyFromByEtf = Object.fromEntries(
+    historyResult.ranges.map((range) => [range.etfId, range.historyFrom]),
+  );
 
   return (
     <main className="min-h-screen bg-background">
@@ -50,11 +57,23 @@ export default async function RankingsPage() {
               <AlertDescription>{result.error}</AlertDescription>
             </Alert>
           ) : null}
+          {historyResult.error ? (
+            <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+              <AlertCircle className="size-4" aria-hidden="true" />
+              <AlertTitle>歷史範圍讀取異常</AlertTitle>
+              <AlertDescription>{historyResult.error}</AlertDescription>
+            </Alert>
+          ) : null}
         </div>
       </section>
 
       <section className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <RankingsTable rows={result.rows} warnings={result.warnings} error={result.error} />
+        <RankingsTable
+          rows={result.rows}
+          historyFromByEtf={historyFromByEtf}
+          warnings={result.warnings}
+          error={result.error}
+        />
       </section>
     </main>
   );

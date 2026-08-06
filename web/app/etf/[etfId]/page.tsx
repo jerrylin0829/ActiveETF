@@ -10,6 +10,10 @@ import { DataGapAlerts } from "@/components/data-gap-alerts";
 import { SiteNav } from "@/components/site-nav";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fetchEtfDetail } from "@/lib/etf-detail-data";
+import {
+  fetchHistoryRanges,
+  formatHistoryFrom,
+} from "@/lib/history-range";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -29,7 +33,10 @@ export default async function EtfDetailPage({
     params,
     searchParams ?? emptySearchParams,
   ]);
-  const result = await fetchEtfDetail(etfId, query.stock);
+  const [result, historyResult] = await Promise.all([
+    fetchEtfDetail(etfId, query.stock),
+    fetchHistoryRanges(),
+  ]);
 
   if (!result.found) {
     if (!result.error) notFound();
@@ -47,6 +54,7 @@ export default async function EtfDetailPage({
   }
 
   const detail = result.detail;
+  const historyLabel = formatHistoryFrom(historyResult.ranges, etfId);
 
   return (
     <main className="min-h-screen bg-background">
@@ -59,6 +67,11 @@ export default async function EtfDetailPage({
                 <span className="font-mono tabular-nums">{detail.etfId}</span>{" "}
                 {detail.name}
               </h1>
+              {historyLabel ? (
+                <p className="mt-2 font-mono text-xs text-muted-foreground tabular-nums">
+                  {historyLabel}
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-3 lg:items-end">
               <SiteNav />
@@ -84,6 +97,13 @@ export default async function EtfDetailPage({
               <AlertCircle className="size-4" aria-hidden="true" />
               <AlertTitle>部分資料讀取異常</AlertTitle>
               <AlertDescription>{detail.error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {historyResult.error ? (
+            <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+              <AlertCircle className="size-4" aria-hidden="true" />
+              <AlertTitle>歷史範圍讀取異常</AlertTitle>
+              <AlertDescription>{historyResult.error}</AlertDescription>
             </Alert>
           ) : null}
           <DataGapAlerts warnings={detail.warnings} />

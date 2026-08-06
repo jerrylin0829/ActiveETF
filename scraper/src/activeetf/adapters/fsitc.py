@@ -1,12 +1,17 @@
 """第一金投信 PCF adapter."""
+import datetime as dt
 import json
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
 
+from activeetf.adapters import base
 from activeetf.adapters.base import UA
 from activeetf.models import Holding
 from activeetf.registry import EtfEntry
+
+# 請求 D 拿到的是 D 的前一交易日資料（sdate = D-1）
+HISTORY_REQUEST_OFFSET = 1
 
 
 def _num(text: str) -> float:
@@ -33,6 +38,13 @@ def parse(payload: dict) -> list[Holding]:
     return holdings
 
 
+def source_date(payload: dict) -> dt.date | None:
+    """上游自報的資料日 = 各列的 `sdate`（原本整個被丟棄）。"""
+    return base.unique_upstream_date(
+        row.get("sdate") for row in json.loads(payload.get("d") or "[]")
+    )
+
+
 def _fund_id(url: str) -> str:
     fund_id = parse_qs(urlparse(url).query).get("ID", [""])[0]
     if not fund_id:
@@ -40,15 +52,29 @@ def _fund_id(url: str) -> str:
     return fund_id
 
 
-def fetch(entry: EtfEntry) -> list[Holding]:
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> dict:
     if not entry.pcf_url:
         raise ValueError("pcf_url is required")
     endpoint = urljoin(entry.pcf_url, "WebAPI.aspx/Get_hd")
     r = requests.post(
         endpoint,
-        json={"pStrFundID": _fund_id(entry.pcf_url), "pStrDate": ""},
+        json={
+            "pStrFundID": _fund_id(entry.pcf_url),
+            "pStrDate": date.strftime("%Y/%m/%d") if date else "",
+        },
         headers={**UA, "Referer": entry.pcf_url},
         timeout=30,
     )
     r.raise_for_status()
-    return parse(r.json())
+    return r.json()
+
+
+def fetch(entry: EtfEntry) -> list[Holding]:
+    return parse(_fetch_pcf(entry, None))
+
+
+def fetch_at(
+    entry: EtfEntry, date: dt.date
+) -> tuple[list[Holding], dt.date | None]:
+    payload = _fetch_pcf(entry, date)
+    return parse(payload), source_date(payload)

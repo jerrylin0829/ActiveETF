@@ -108,6 +108,20 @@ export function buildPickingSummary(wins: number, total: number): {
   };
 }
 
+export function buildPickingSummaryWithHistory(
+  wins: number,
+  total: number,
+  historyFrom: string | null,
+): ReturnType<typeof buildPickingSummary> {
+  const summary = buildPickingSummary(wins, total);
+  return historyFrom
+    ? {
+        ...summary,
+        label: `${summary.label}｜自 ${historyFrom} 起`,
+      }
+    : summary;
+}
+
 export function winRateValue(wins: number, total: number): number | null {
   return total > 0 ? wins / total : null;
 }
@@ -156,6 +170,11 @@ function formatEtfList(items: string[]): string {
 export function latestUnresolvedScrapeFailures(logs: ScrapeLogEntry[]): ScrapeFailure[] {
   const latestByKey = new Map<string, ScrapeLogEntry>();
   const sortedLogs = [...logs].sort((a, b) => {
+    const tradeDateDiff = b.tradeDate.localeCompare(a.tradeDate);
+    if (tradeDateDiff !== 0) {
+      return tradeDateDiff;
+    }
+
     const diff = Date.parse(b.runAt) - Date.parse(a.runAt);
     return Number.isNaN(diff) || diff === 0 ? b.runAt.localeCompare(a.runAt) : diff;
   });
