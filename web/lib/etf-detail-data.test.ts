@@ -310,6 +310,45 @@ describe("fetchEtfDetail", () => {
     });
   });
 
+  it("keeps a recent failure visible when historical backfill logs exceed the limit", async () => {
+    const backfillLogs = Array.from({ length: 300 }, (_, index) => ({
+      id: index + 10,
+      etf_id: "00981A",
+      trade_date: `2025-01-${String((index % 28) + 1).padStart(2, "0")}`,
+      run_at: `2026-08-01T${String(index % 24).padStart(2, "0")}:00:00Z`,
+      status: "ok",
+      error: null,
+    }));
+    const executions = installSupabaseDouble({
+      scrape_log: [
+        ...backfillLogs,
+        {
+          id: 1,
+          etf_id: "00981A",
+          trade_date: dates[0],
+          run_at: "2026-07-31T09:00:00Z",
+          status: "fail",
+          error: "daily scrape failed",
+        },
+      ],
+    });
+
+    const result = await fetchEtfDetail("00981A");
+
+    expect(result.found).toBe(true);
+    if (!result.found) return;
+    expect(result.detail.warnings).toContainEqual({
+      title: "近期爬蟲失敗",
+      description: `${dates[0]}：daily scrape failed`,
+    });
+    const scrapeQuery = executions.find((execution) => execution.table === "scrape_log");
+    expect(scrapeQuery?.orders.map((order) => order.column)).toEqual([
+      "trade_date",
+      "run_at",
+      "id",
+    ]);
+  });
+
   it("paginates snapshot rows under a complete primary-key order", async () => {
     const manyRows = Array.from({ length: 1001 }, (_, index) => ({
       etf_id: "00981A",

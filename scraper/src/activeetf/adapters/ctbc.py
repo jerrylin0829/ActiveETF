@@ -3,11 +3,14 @@ import datetime as dt
 
 import requests
 
+from activeetf.adapters import base
 from activeetf.adapters.base import UA
 from activeetf.models import Holding
 from activeetf.registry import EtfEntry
 
 _API_BASE = "https://www.ctbcinvestments.com.tw/API"
+# 請求日即資料日（公告日 = 請求日），無需位移
+HISTORY_REQUEST_OFFSET = 0
 _TOKEN_SEED = "www.ctbcinvestments.com"
 _FUND_IDS = {
     "00406A": "E0038",
@@ -49,7 +52,17 @@ def parse(payload: dict) -> list[Holding]:
     return holdings
 
 
-def fetch(entry: EtfEntry) -> list[Holding]:
+def source_date(payload: dict) -> dt.date | None:
+    """上游自報的資料日 = `Data[].公告日`（淨值日期為前一交易日，不可用於核對）。"""
+    body = payload
+    if "Detail" not in body and isinstance(body.get("Data"), dict):
+        body = body["Data"]
+    return base.unique_upstream_date(
+        row.get("公告日") for row in body.get("Data") or []
+    )
+
+
+def _fetch_pcf(entry: EtfEntry, date: dt.date | None) -> dict:
     headers = {**UA, "content-type": "application/json; charset=utf-8"}
     token_response = requests.post(
         f"{_API_BASE}/home/AuthToken",
@@ -67,10 +80,21 @@ def fetch(entry: EtfEntry) -> list[Holding]:
         json={
             "token": token,
             "FID": _FUND_IDS[entry.etf_id],
-            "StartDate": dt.date.today().isoformat(),
+            "StartDate": (date or dt.date.today()).isoformat(),
         },
         headers=headers,
         timeout=30,
     )
     response.raise_for_status()
-    return parse(_data(response))
+    return _data(response)
+
+
+def fetch(entry: EtfEntry) -> list[Holding]:
+    return parse(_fetch_pcf(entry, None))
+
+
+def fetch_at(
+    entry: EtfEntry, date: dt.date
+) -> tuple[list[Holding], dt.date | None]:
+    payload = _fetch_pcf(entry, date)
+    return parse(payload), source_date(payload)

@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 
 from activeetf.adapters import fsitc
@@ -47,3 +48,49 @@ def test_fetch_posts_fund_id_to_get_hd(monkeypatch):
             {"pStrFundID": "182", "pStrDate": ""},
         )
     ]
+
+
+def test_fetch_at_uses_slash_date(monkeypatch):
+    captured = {}
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"d": "[]"}
+
+    def fake_post(url, *, json, headers, timeout):
+        captured.update(json)
+        return Resp()
+
+    monkeypatch.setattr(fsitc.requests, "post", fake_post)
+
+    fsitc.fetch_at(by_id("00994A"), dt.date(2026, 6, 15))
+
+    assert captured["pStrDate"] == "2026/06/15"
+    assert captured["pStrFundID"] == "182"
+
+
+def test_source_date_reads_row_sdate():
+    payload = {
+        "d": json.dumps(
+            [{"group": "1", "A": "2330", "C": "16.91", "D": "345,999",
+              "sdate": "2026-07-27"}]
+        )
+    }
+
+    assert fsitc.source_date(payload) == dt.date(2026, 7, 27)
+
+
+def test_source_date_none_when_upstream_returns_no_rows():
+    assert fsitc.source_date({"d": "[]"}) is None
+
+
+def test_source_date_none_when_rows_disagree():
+    payload = {"d": json.dumps([
+        {"group": "1", "A": "2330", "C": "1.0", "D": "1", "sdate": "2026-07-27"},
+        {"group": "1", "A": "2317", "C": "1.0", "D": "1", "sdate": "2026-07-28"},
+    ])}
+
+    assert fsitc.source_date(payload) is None

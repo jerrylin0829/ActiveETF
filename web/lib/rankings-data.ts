@@ -7,6 +7,7 @@ import {
   type RankingRow,
   type ScrapeLogEntry,
 } from "@/lib/rankings";
+import { orderRecentScrapeLogs } from "@/lib/scrape-log-query";
 
 export type MetricRecord = {
   etf_id: string;
@@ -163,11 +164,11 @@ export async function fetchRankingRows(): Promise<RankingsResult> {
     metricsResult,
   ] = await Promise.all([
     supabase.from("etf").select("etf_id, name, issuer").order("etf_id", { ascending: true }),
-    supabase
-      .from("scrape_log")
-      .select("etf_id, trade_date, run_at, status, error")
-      .order("run_at", { ascending: false })
-      .limit(scrapeLogLookbackLimit),
+    orderRecentScrapeLogs(
+      supabase
+        .from("scrape_log")
+        .select("etf_id, trade_date, run_at, status, error"),
+    ).limit(scrapeLogLookbackLimit),
     fetchAllMetricRecords(supabase),
   ]);
 

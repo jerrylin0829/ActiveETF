@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDataGapWarnings,
   buildPickingSummary,
+  buildPickingSummaryWithHistory,
   formatReturn,
   formatTurnover,
   formatWinRate,
@@ -60,6 +61,22 @@ describe("ranking formatting", () => {
     expect(buildPickingSummary(7, 12)).toEqual({
       label: "58%（7/12）",
       insufficient: false,
+    });
+  });
+
+  it("無條件在選股勝率後加註歷史起算日", () => {
+    expect(
+      buildPickingSummaryWithHistory(14, 22, "2025-05-16"),
+    ).toEqual({
+      label: "64%（14/22）｜自 2025-05-16 起",
+      insufficient: false,
+    });
+  });
+
+  it("無起算日時維持既有標籤與樣本不足規則", () => {
+    expect(buildPickingSummaryWithHistory(2, 5, null)).toEqual({
+      label: "40%（2/5）",
+      insufficient: true,
     });
   });
 
@@ -218,5 +235,33 @@ describe("data gap warnings", () => {
         error: "ValidationError: empty holdings",
       },
     ]);
+  });
+
+  it("puts recent trade-date failures before later-run historical failures", () => {
+    const historicalFailures = Array.from({ length: 6 }, (_, index) => ({
+      etfId: `HIST${index}`,
+      tradeDate: `2025-12-${String(index + 1).padStart(2, "0")}`,
+      runAt: `2026-08-${String(index + 1).padStart(2, "0")}T12:00:00Z`,
+      status: "fail" as const,
+      error: "historical failure",
+    }));
+
+    expect(
+      latestUnresolvedScrapeFailures([
+        ...historicalFailures,
+        {
+          etfId: "00985A",
+          tradeDate: "2026-07-24",
+          runAt: "2026-07-24T10:00:00Z",
+          status: "fail",
+          error: "daily failure",
+        },
+      ])[0],
+    ).toEqual({
+      etfId: "00985A",
+      tradeDate: "2026-07-24",
+      runAt: "2026-07-24T10:00:00Z",
+      error: "daily failure",
+    });
   });
 });

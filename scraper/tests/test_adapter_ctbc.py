@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -54,3 +55,51 @@ def test_fetch_gets_token_then_posts_fund_id(monkeypatch):
     assert calls[1][2]["token"] == "short-lived-token"
     assert calls[1][2]["FID"] == "E0038"
     assert calls[1][2]["StartDate"]
+
+
+def test_fetch_at_sends_token_in_both_places(monkeypatch):
+    captured = {}
+
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.body
+
+    def fake_post(url, *, params, json, headers, timeout):
+        if url.endswith("/home/AuthToken"):
+            return Resp({"ResultCode": 0, "Data": {"token": "tok"}})
+        captured["params"] = params
+        captured["body"] = json
+        return Resp({"ResultCode": 0, "Data": {"Detail": []}})
+
+    monkeypatch.setattr(ctbc.requests, "post", fake_post)
+
+    ctbc.fetch_at(by_id("00406A"), dt.date(2026, 6, 15))
+
+    assert captured["body"]["StartDate"] == "2026-06-15"
+    assert captured["params"]["token"] == "tok"
+    assert captured["body"]["token"] == "tok"
+
+
+def test_source_date_reads_announcement_date():
+    payload = json.loads(FIXTURE.read_text())
+
+    assert ctbc.source_date(payload) == dt.date(2026, 7, 9)
+
+
+def test_source_date_none_when_upstream_omits_it():
+    assert ctbc.source_date({"Data": []}) is None
+
+
+def test_source_date_none_when_rows_disagree():
+    payload = {"Detail": [], "Data": [
+        {"公告日": "2026/07/27"},
+        {"公告日": "2026/07/28"},
+    ]}
+
+    assert ctbc.source_date(payload) is None

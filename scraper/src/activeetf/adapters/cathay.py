@@ -1,4 +1,5 @@
 """國泰投信持股權重 adapter."""
+import datetime as dt
 import re
 import xml.etree.ElementTree as ET
 import zipfile
@@ -6,11 +7,14 @@ from io import BytesIO
 
 import requests
 
+from activeetf.adapters import base
 from activeetf.adapters.base import UA
 from activeetf.models import Holding
 from activeetf.registry import EtfEntry
 
 _API_BASE = "https://cwapi.cathaysite.com.tw/api/ETF"
+# 請求日即資料日（表頭「YYYY/MM/DD基金持股權重」= 請求日），無需位移
+HISTORY_REQUEST_OFFSET = 0
 _FUND_CODES = {"00400A": "EA"}
 _NS = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
@@ -86,6 +90,33 @@ def parse_xlsx(content: bytes) -> list[Holding]:
     return holdings
 
 
+def source_date_from_rows(rows: list[dict[str, str]]) -> dt.date | None:
+    """上游自報的資料日 = 表頭「YYYY/MM/DD基金持股權重」那一列。"""
+    for row in rows[:5]:
+        if "持股權重" in row.get("A", ""):
+            return base.parse_upstream_date(row["A"])
+    return None
+
+
+def source_date(content: bytes) -> dt.date | None:
+    return source_date_from_rows(_rows(content))
+
+
+def _download(fund_code: str, search_date: str) -> bytes:
+    workbook = requests.get(
+        f"{_API_BASE}/DownloadETFWeightExcel",
+        params={
+            "FundCode": fund_code,
+            "SearchDate": search_date,
+            "status": 1,
+        },
+        headers=UA,
+        timeout=30,
+    )
+    workbook.raise_for_status()
+    return workbook.content
+
+
 def fetch(entry: EtfEntry) -> list[Holding]:
     fund_code = _FUND_CODES[entry.etf_id]
     info = requests.get(
@@ -99,16 +130,11 @@ def fetch(entry: EtfEntry) -> list[Holding]:
     if payload.get("returnCode") != "2000":
         raise ValueError("Cathay fund info request failed")
     nav_date = payload["result"]["navDate"].replace("/", "-")
+    return parse_xlsx(_download(fund_code, nav_date))
 
-    workbook = requests.get(
-        f"{_API_BASE}/DownloadETFWeightExcel",
-        params={
-            "FundCode": fund_code,
-            "SearchDate": nav_date,
-            "status": 1,
-        },
-        headers=UA,
-        timeout=30,
-    )
-    workbook.raise_for_status()
-    return parse_xlsx(workbook.content)
+
+def fetch_at(
+    entry: EtfEntry, date: dt.date
+) -> tuple[list[Holding], dt.date | None]:
+    content = _download(_FUND_CODES[entry.etf_id], date.isoformat())
+    return parse_xlsx(content), source_date(content)

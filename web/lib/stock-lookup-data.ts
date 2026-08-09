@@ -12,6 +12,7 @@ import {
   type DataGapWarning,
   type ScrapeLogEntry,
 } from "@/lib/rankings";
+import { orderRecentScrapeLogs } from "@/lib/scrape-log-query";
 import { createReadOnlySupabaseClient } from "@/lib/supabase";
 
 type DateRecord = { trade_date: string };
@@ -178,12 +179,11 @@ export async function fetchStockLookup(stockId: string): Promise<StockLookupResu
       .select("stock_id, name, industry")
       .eq("stock_id", stockId)
       .limit(1),
-    supabase
-      .from("scrape_log")
-      .select("etf_id, trade_date, run_at, status, error")
-      .order("run_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(scrapeLogLimit),
+    orderRecentScrapeLogs(
+      supabase
+        .from("scrape_log")
+        .select("etf_id, trade_date, run_at, status, error"),
+    ).limit(scrapeLogLimit),
   ]);
 
   const globalDates = ((globalDateQuery.data ?? []) as DateRecord[]).map((record) => record.trade_date);

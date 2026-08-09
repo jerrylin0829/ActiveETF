@@ -22,6 +22,7 @@ import {
   type DataGapWarning,
   type ScrapeLogEntry,
 } from "@/lib/rankings";
+import { orderRecentScrapeLogs } from "@/lib/scrape-log-query";
 
 type EtfRecord = {
   etf_id: string;
@@ -346,13 +347,12 @@ export async function fetchEtfDetail(
             .range(from, to),
         )
       : Promise.resolve({ data: [] as ChangeRecord[], error: null }),
-    supabase
-      .from("scrape_log")
-      .select("etf_id, trade_date, run_at, status, error")
-      .eq("etf_id", etfId)
-      .order("run_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(scrapeLogLimit),
+    orderRecentScrapeLogs(
+      supabase
+        .from("scrape_log")
+        .select("etf_id, trade_date, run_at, status, error")
+        .eq("etf_id", etfId),
+    ).limit(scrapeLogLimit),
   ]);
 
   const currentRecords = snapshotResult.data.filter((record) => record.trade_date === latestDate);
